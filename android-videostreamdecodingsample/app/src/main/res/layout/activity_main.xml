@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,20 +18,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_centerInParent="true"
-            android:textColor="@android:color/white"
-            android:text="@string/title_main_activity"/>
+            android:text="@string/title_main_activity"
+            android:textColor="@android:color/white" />
 
     </RelativeLayout>
-
-    <TextureView
-        android:id="@+id/livestream_preview_ttv"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_centerInParent="true"
-        android:layout_gravity="center"
-        android:alpha="50"
-        android:visibility="visible"
-        android:layout_below="@id/main_title_rl"/>
 
     <SurfaceView
         android:id="@+id/livestream_preview_sf"
@@ -49,55 +40,215 @@
         android:orientation="vertical">
 
         <Button
+            android:id="@+id/virtual_sticks_enable_disable_button"
+            android:layout_width="100dip"
+            android:layout_height="wrap_content"
+            android:text="Virtual Sticks: DISABLED"
+            android:textAlignment="center" />
+
+        <androidx.constraintlayout.widget.Barrier
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:barrierDirection="top" />
+
+        <Button
+            android:id="@+id/takeoff_button"
+            android:layout_width="100dip"
+            android:layout_height="wrap_content"
+            android:text="Takeoff" />
+
+        <androidx.constraintlayout.widget.Barrier
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:barrierDirection="top" />
+
+        <Button
+            android:id="@+id/land_button"
+            android:layout_width="100dip"
+            android:layout_height="wrap_content"
+            android:text="Land" />
+
+        <TextView
+            android:id="@+id/companion_board_status_textview"
+            android:layout_width="200dip"
+            android:layout_height="wrap_content"
+            android:text="uninitialized" />
+
+        <EditText
+            android:id="@+id/cb_address_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ems="10"
+            android:inputType="textPersonName"
+            android:text="192.168.1.115" />
+
+        <Button
             android:id="@+id/activity_main_screen_texture"
             android:layout_width="150dp"
             android:layout_height="wrap_content"
-            android:text="Demo TextureView"
             android:clickable="true"
+            android:gravity="center"
             android:onClick="onClick"
-            android:gravity="center"  />
+            android:text="Demo TextureView"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/activity_main_screen_surface_with_own_decoder"
             android:layout_width="150dp"
             android:layout_height="wrap_content"
-            android:text="Demo custom decoder"
             android:clickable="true"
+            android:gravity="center"
             android:onClick="onClick"
-            android:gravity="center" />
+            android:text="Demo custom decoder"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/activity_main_screen_surface"
             android:layout_width="150dp"
             android:layout_height="wrap_content"
-            android:text="Demo SurfaceView"
+            android:gravity="center"
             android:onClick="onClick"
-            android:gravity="center" />
+            android:text="Demo SurfaceView"
+            android:visibility="gone" />
 
 
         <Button
             android:id="@+id/activity_main_screen_shot"
             android:layout_width="150dp"
             android:layout_height="wrap_content"
-            android:text="YUV Screen Shot"
             android:clickable="true"
+            android:gravity="center"
             android:onClick="onClick"
-            android:gravity="center" />
+            android:text="YUV Screen Shot"
+            android:visibility="gone" />
 
     </LinearLayout>
+
     <TextView
         android:id="@+id/activity_main_save_path"
         android:layout_width="400dp"
         android:layout_height="match_parent"
-        android:padding="5dp"
-        android:background="@color/title_dark"
-        android:layout_toRightOf="@id/activity_main_screen_shot"
-        android:layout_alignParentRight="true"
         android:layout_below="@id/main_title_rl"
-        android:textColor="@color/colorWhite"
-        android:visibility="invisible"
-        android:scrollbars="vertical"
+        android:layout_alignParentRight="true"
+        android:layout_toRightOf="@id/activity_main_screen_shot"
+        android:background="@color/title_dark"
         android:gravity="bottom"
-        />
+        android:padding="5dp"
+        android:scrollbars="vertical"
+        android:textColor="@color/colorWhite"
+        android:visibility="invisible" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <SeekBar
+            android:id="@+id/yaw_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_horizontal"
+            android:max="1000"
+            android:progress="500"
+            android:translationY="130dip" />
+
+        <TextView
+            android:id="@+id/yaw_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="Yaw"
+            android:translationY="110dip" />
+
+        <SeekBar
+            android:id="@+id/roll_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_horizontal"
+            android:max="1000"
+            android:progress="500"
+            android:translationY="580dip" />
+
+        <TextView
+            android:id="@+id/roll_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="Roll"
+            android:translationY="620dip" />
+
+        <SeekBar
+            android:id="@+id/throttle_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_vertical"
+            android:max="1000"
+            android:progress="500"
+            android:rotation="270"
+            android:translationX="175dip" />
+
+        <TextView
+            android:id="@+id/throttle_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:rotation="270"
+            android:text="Throttle"
+            android:translationX="300dip" />
+
+        <SeekBar
+            android:id="@+id/pitch_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_vertical"
+            android:max="1000"
+            android:progress="500"
+            android:rotation="270"
+            android:translationX="750dip" />
+
+        <TextView
+            android:id="@+id/pitch_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:rotation="270"
+            android:text="Pitch"
+            android:translationX="975dip" />
+
+        <SeekBar
+            android:id="@+id/gimbal_tilt_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_vertical"
+            android:max="85000"
+            android:progress="500"
+            android:rotation="270"
+            android:translationX="1000dip" />
+
+        <TextView
+            android:id="@+id/gimbal_tilt_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:rotation="270"
+            android:text="Gimbal Tilt"
+            android:translationX="1075dip" />
+
+        <TextureView
+            android:id="@+id/livestream_preview_ttv"
+            android:layout_width="500dip"
+            android:layout_height="375dip"
+            android:layout_gravity="center"
+            android:alpha="50"
+            android:visibility="visible" />
+
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/frame_info_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerHorizontal="true"
+        android:text="TextView"
+        android:translationY="75dip" />
 
 </RelativeLayout>

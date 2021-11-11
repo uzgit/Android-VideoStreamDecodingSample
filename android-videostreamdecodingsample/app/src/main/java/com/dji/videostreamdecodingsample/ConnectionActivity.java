@@ -114,7 +114,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
                                 runOnUiThread(new Runnable() {
                                     @Override
                                     public void run() {
-                                        loginDJIUserAccount();
+                                        //loginDJIUserAccount();
                                     }
                                 });
                             } else {
@@ -355,6 +355,9 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
             if (KeyManager.getInstance() != null) {
                 KeyManager.getInstance().addListener(firmkey, firmVersionListener);
             }
+
+            Intent intent = new Intent(this, MainActivity.class);
+            startActivity(intent);
         } else {
             Log.v(TAG, "refreshSDK: False");
             mBtnOpen.setEnabled(false);
