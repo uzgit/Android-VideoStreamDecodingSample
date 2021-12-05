@@ -32,10 +32,13 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.RequiresApi;
+
 import com.dji.videostreamdecodingsample.media.DJIVideoStreamDecoder;
 import com.dji.videostreamdecodingsample.media.NativeHelper;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -44,8 +47,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -53,6 +59,7 @@ import java.util.TimerTask;
 import dji.common.airlink.PhysicalSource;
 import dji.common.camera.SettingsDefinitions;
 import dji.common.error.DJIError;
+import dji.common.flightcontroller.FlightControllerState;
 import dji.common.flightcontroller.virtualstick.FlightControlData;
 import dji.common.flightcontroller.virtualstick.FlightCoordinateSystem;
 import dji.common.flightcontroller.virtualstick.RollPitchControlMode;
@@ -128,6 +135,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     private NotifierTask notifierTask;
     private Timer notifierTaskTimer;
 
+//    private FlightControllerStateTask flightControllerStateTask;
+    private Timer flightControllerStateTaskTimer;
+
     float command_roll;
     float command_pitch;
     float command_yaw;
@@ -149,6 +159,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     TextView throttle_text;
     TextView gimbal_tilt_text;
 
+    TextView mode_text;
+
     EditText cb_address_text;
 
     Button virtual_sticks_enable_disable_button;
@@ -157,6 +169,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private Aircraft aircraft;
     private FlightController flight_controller;
+    private FlightControllerState flight_controller_state;
+
+    private String mode = "landed";
 
     boolean enable_virtual_sticks = false;
     boolean new_gimbal_seekbar_data = false;
@@ -218,7 +233,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
-        initUi();
+        initUiMain();
         if (isM300Product()) {
             OcuSyncLink ocuSyncLink = VideoDecodingApplication.getProductInstance().getAirLink().getOcuSyncLink();
             // If your MutltipleLensCamera is set at right or top, you need to change the PhysicalSource to RIGHT_CAM or TOP_CAM.
@@ -255,7 +270,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         );
     }
 
-    private void initUi() {
+    private void initUiMain() {
 
         cb_address_text = (EditText) findViewById(R.id.cb_address_text);
 
@@ -264,6 +279,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         frame_info_text = (TextView) findViewById(R.id.frame_info_textview);
         frame_info_text.setText("Initializing...");
+
+        mode_text = (TextView) findViewById(R.id.mode_textview);
+        mode_text.setText("initializing...");
 
         companion_board_status_text = (TextView) findViewById(R.id.companion_board_status_textview);
 
@@ -441,16 +459,14 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-//                float range = seekBar.getMax();
-//                float idle = range / (float)2.0;
-//                float control = 2 * ((float) progress - idle) / range;
-
-                float control = -progress / 1000;
+                float range = seekBar.getMax();
+                float idle = range / (float)2.0;
+                float control = 2 * ((float) progress - idle) / range;
 
                 command_gimbal_tilt = control;
                 gimbal_tilt_text.setText("Gimbal Tilt: " + String.valueOf(command_gimbal_tilt));
 
-                new_gimbal_seekbar_data = true;
+//                new_gimbal_seekbar_data = true;
             }
 
             @Override
@@ -459,13 +475,15 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
+                float idle = seekBar.getMax() / (float) 2.0;
+                seekBar.setProgress((int) idle);
             }
         });
 
         if (null == connectCompanionBoardTask) {
-            connectCompanionBoardTask = new ConnectCompanionBoardTask(companion_board_status_text);
+            connectCompanionBoardTask = new ConnectCompanionBoardTask();
             connectCompanionBoardTaskTimer = new Timer();
-            connectCompanionBoardTaskTimer.schedule(connectCompanionBoardTask, 100, 100);
+            connectCompanionBoardTaskTimer.schedule(connectCompanionBoardTask, 100, 50);
         }
 
         if (null == actuateTask) {
@@ -479,6 +497,18 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             notifierTask = new NotifierTask();
             notifierTaskTimer = new Timer();
             notifierTaskTimer.schedule(notifierTask, 100, 50);
+        }
+
+        if( null == flightControllerStateTaskTimer )
+        {
+            flightControllerStateTaskTimer = new Timer();
+            flightControllerStateTaskTimer.schedule(new TimerTask() {
+                @Override
+                public void run()
+                {
+                    flight_controller_state = flight_controller.getState();
+                }
+            }, 100, 1000);
         }
 
         set_default_modes();
@@ -625,7 +655,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
                 frame_info_text.setText(String.valueOf(System.currentTimeMillis()));
-                connectCompanionBoardTask.send_image();
+                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
             }
         });
     }
@@ -895,6 +925,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             case R.id.takeoff_button:
 
+                connectCompanionBoardTask.notify_takeoff();
+
                 takeoff_button.setBackgroundColor(Color.GREEN);
                 flight_controller.startTakeoff(new CommonCallbacks.CompletionCallback() {
                     @Override
@@ -912,6 +944,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 break;
 
             case R.id.land_button:
+
+                connectCompanionBoardTask.notify_landing();
 
                 land_button.setBackgroundColor(Color.GREEN);
                 flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
@@ -1026,6 +1060,33 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             {
                 virtual_sticks_enable_disable_button.setBackgroundColor(Color.GRAY);
             }
+
+            if( connectCompanionBoardTask.is_connected() )
+            {
+                companion_board_status_text.setText("CB connected!");
+            }
+            else
+            {
+                companion_board_status_text.setText("CB disconnected!");
+            }
+
+            if( mode.equals("landing") && ! flight_controller_state.areMotorsOn() )
+            {
+                connectCompanionBoardTask.notify_landed();
+            }
+            else if( mode.equals("takeoff") && flight_controller_state.isFlying() )
+            {
+                connectCompanionBoardTask.notify_precision_hover();
+            }
+
+            if( ! mode.equals(mode_text.getText())) {
+                try {
+                    mode_text.setText("Mode: " + String.valueOf(mode));
+                } catch (Exception e) {
+                    showToast(e.toString());
+                    showToast(mode);
+                }
+            }
         }
     }
 
@@ -1072,6 +1133,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         @Override
         public void run()
         {
+//            Log.d(TAG, String.valueOf(actuate) + "     " + String.valueOf(data_received));
+
             if( actuate && data_received )
             {
                 try {
@@ -1081,11 +1144,12 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     pitch_seekbar.setProgress(constrain(control_to_progress(command_pitch, (float) -1.0, (float) 1.0, 0, pitch_seekbar.getMax()), pitch_seekbar));
                     yaw_seekbar.setProgress(constrain(control_to_progress(command_yaw, (float) -1.0, (float) 1.0, 0, yaw_seekbar.getMax()), yaw_seekbar));
                     throttle_seekbar.setProgress(constrain(control_to_progress(command_throttle, (float) -1.0, (float) 1.0, 0, throttle_seekbar.getMax()), throttle_seekbar));
-                    gimbal_tilt_seekbar.setProgress( constrain( (int)command_gimbal_tilt*(-1000), 85000));
-
+//                    gimbal_tilt_seekbar.setProgress( constrain( (int)command_gimbal_tilt*(-1000), 85000));
+                    gimbal_tilt_seekbar.setProgress(constrain(control_to_progress(command_gimbal_tilt, (float) -1.0, (float) 1.0, 0, gimbal_tilt_seekbar.getMax()), gimbal_tilt_seekbar));
 //                    frame_info_text.setText("Actuating!");
 
-                    Log.d(TAG, String.format("roll: %.4f, pitch: %.4f, yaw: %.4f, throttle: %.4f, gimbal_tilt:%.4f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
+//                    showToast("Actuating...");
+//                    Log.d(TAG, String.format("**************************************************************** roll: %.4f, pitch: %.4f, yaw: %.4f, throttle: %.4f, gimbal_tilt:%.4f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
                 }
                 catch( Exception e )
                 {
@@ -1097,27 +1161,30 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             {
                 command_land = false;
 
-                flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
-                    @Override
-                    public void onResult(DJIError djiError) {
-                        if( null == djiError )
-                        {
+                if( flight_controller_state != null && flight_controller_state.areMotorsOn() ) {
+                    flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
+                        @Override
+                        public void onResult(DJIError djiError) {
+                            if (null == djiError) {
 //                            land_button.setBackgroundColor(Color.GRAY);
-                        }
-                        else
-                        {
+                            } else {
 //                            land_button.setBackgroundColor(Color.RED);
+                            }
                         }
-                    }
-                });
+                    });
+                }
+                else
+                {
+                    connectCompanionBoardTask.notify_landed();
+                }
             }
 
-            if( actuate && (data_received || new_gimbal_seekbar_data ) )
+            if( actuate )//&& (data_received || new_gimbal_seekbar_data ) )
             {
                 try
                 {
-                    VideoDecodingApplication.getProductInstance().getGimbal().rotate(new Rotation.Builder().pitch(command_gimbal_tilt)
-                            .mode(RotationMode.ABSOLUTE_ANGLE)
+                    VideoDecodingApplication.getProductInstance().getGimbal().rotate(new Rotation.Builder().pitch(100 * command_gimbal_tilt)
+                            .mode(RotationMode.SPEED)
                             .yaw(Rotation.NO_ROTATION)
                             .roll(Rotation.NO_ROTATION)
                             .time(0)
@@ -1157,58 +1224,176 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private class ConnectCompanionBoardTask extends TimerTask {
 
-        private String host = "192.168.1.115";
+//        private String host = "192.168.1.115";
 //        private String host = "192.168.1.21";
-        private String port = "14555";
+//        private String host = "192.168.50.185";
+        private String host;
+        private String image_port = "14555";
+        private String command_port  = "14556";
 
         private boolean notified_disconnected = false;
         private boolean notified_connected = false;
-        private TextView status_text;
 
         long send_limit = 100;
         long last_send_time;
 
-        Socket companion_board_socket = null;
-        OutputStream output_stream = null;
-        BufferedReader input_stream = null;
+        Socket image_socket = null;
+        Socket command_socket = null;
 
-        Thread thread;
+        OutputStream image_output_stream = null;
 
-        ConnectCompanionBoardTask(TextView status_textview)
+        OutputStream command_output_stream = null;
+        BufferedReader command_input_stream = null;
+
+        private boolean is_connected = false;
+
+        private Bitmap image_to_send = null;
+        private String input_string = null;
+
+        ConnectCompanionBoardTask()
         {
             super();
-
-            status_text = status_textview;
-            status_text.setText("Initialized connection task!");
 
             last_send_time = System.currentTimeMillis();
         }
 
-        @Override
-        public void run()
+        boolean is_connected()
         {
-            if( null == companion_board_socket )
-            {
-                // notify
-                status_text.setText("CB disconnected!");
+            return is_connected;
+        }
 
+        private void open_sockets()
+        {
+            try{
+                image_socket = new Socket(host, Integer.valueOf(image_port));
+                command_socket = new Socket(host, Integer.valueOf(command_port));
+
+                image_output_stream = image_socket.getOutputStream();
+
+                command_output_stream = command_socket.getOutputStream();
+                command_input_stream = new BufferedReader(new InputStreamReader(command_socket.getInputStream()));
+
+                is_connected = true;
+
+                image_socket.setSoTimeout(1500);
+                command_socket.setSoTimeout(1500);
+
+                showToast("Connecting to CB...");
+            }
+            catch( Exception e )
+            {
+                close_sockets();
+            }
+        }
+
+        private void close_sockets()
+        {
+            try{
+                image_socket.close();
+            }
+            catch( Exception e )
+            {
+                e.printStackTrace();
+            }
+
+            try{
+                command_socket.close();
+            }
+            catch( Exception e )
+            {
+                e.printStackTrace();
+            }
+
+            image_socket = null;
+            command_socket = null;
+
+            image_output_stream = null;
+            command_input_stream = null;
+            command_output_stream = null;
+
+            is_connected = false;
+        }
+
+        private void maintain_connection()
+        {
+            if( ! is_connected ) {
                 // try to connect
                 try {
                     host = cb_address_text.getText().toString();
 
-                    companion_board_socket = new Socket(host, Integer.valueOf(port));
-                    output_stream = companion_board_socket.getOutputStream();
-                    input_stream = new BufferedReader(new InputStreamReader(companion_board_socket.getInputStream()));
-                } catch (IOException e) {
+                    open_sockets();
+                } catch( Exception e ) {
                     e.printStackTrace();
                 }
             }
-            else if( companion_board_socket.isConnected() )
-            {
-                // notify
-                status_text.setText("CB connected!");
+        }
 
-                read_commands();
+        public void send_bytes(OutputStream output_stream, byte[] byte_array)
+        {
+            if( null != output_stream ) {
+                Thread thread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            int size = byte_array.length;
+                            byte[] size_bytes = ByteBuffer.allocate(4).putInt(size).array();
+
+                            output_stream.write(size_bytes);
+                            output_stream.write(byte_array);
+                        } catch (Exception e) {
+                            close_sockets();
+
+                            e.printStackTrace();
+                        }
+                    }
+                });
+                thread.start();
+            }
+        }
+
+        public String get_line()
+        {
+            String result = null;
+            if( null != command_input_stream ) {
+                try {
+                    result = command_input_stream.readLine();
+                } catch (Exception e) {
+                    close_sockets();
+
+                    e.printStackTrace();
+                }
+            }
+            return result;
+        }
+
+        // this method is used to:
+        //  1. initiate a connection if the connection is null
+        //  2. send an image if it has been requested
+        //  3.read data from the connection if it is connected
+        @Override
+        public void run()
+        {
+            maintain_connection();
+
+            send_image();
+
+            read_commands();
+        }
+
+        public void send_image()
+        {
+            if( null != image_to_send ) {
+                Bitmap bitmap_image = toGrayScale(image_to_send);
+                ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
+                }
+                byte[] image_byte_array = byte_stream.toByteArray();
+
+                send_bytes(image_output_stream, image_byte_array);
+
+                image_to_send = null;
+//                showToast("Sent" + String.valueOf(System.currentTimeMillis()));
             }
         }
 
@@ -1230,88 +1415,167 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             return bmpGrayscale;
         }
 
-        public void send_image()
+        public void set_image_to_send(Bitmap bitmap_image)
         {
-            if( null != companion_board_socket && System.currentTimeMillis() - last_send_time >= send_limit && (null == thread || ! thread.isAlive()) )
-//            if( System.currentTimeMillis() - last_send_time >= send_limit )
-            {
-                last_send_time = System.currentTimeMillis();
-
-                // networked task in separate Thread
-                thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-
-                        Bitmap bitmap_image = toGrayScale( videostreamPreviewTtView.getBitmap() );
-                        ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
-                        }
-                        byte[] image_byte_array = byte_stream.toByteArray();
-                        int size = image_byte_array.length;
-                        byte[] size_bytes = ByteBuffer.allocate(4).putInt(size).array();
-
-                        try {
-                            output_stream.write(size_bytes);
-                            Log.d(TAG, String.valueOf(size));
-                            output_stream.write(image_byte_array);
-                        } catch (Exception e) {
-                            Log.d(TAG, e.toString());
-                            status_text.setText("CB disconnected!");
-
-                            // disconnect
-                            try {
-                                companion_board_socket.close();
-                                companion_board_socket = null;
-                            } catch (IOException ioException) {
-                                ioException.printStackTrace();
-                            }
-                        }
-                    }
-                });
-                thread.start();
+            if( null == image_to_send ) {
+                this.image_to_send = bitmap_image;
             }
         }
 
         public void read_commands()
         {
-            if( null != input_stream )
-            {
-                String data = ""; // order: roll, pitch, yaw, throttle, gimbal_tilt
-                try {
-                    data = input_stream.readLine();
+            String[] commands = {"landed", "takeoff", "search", "idle_inflight", "approach", "landing", "+"};
 
-                    try
-                    {
-                        char first_character = data.charAt(0);
-                        if( first_character == 'L' )
-                        {
-                            command_land = true;
+            Thread thread = new Thread(new Runnable() {
+                @RequiresApi(api = Build.VERSION_CODES.N)
+                @Override
+                public void run() {
+                    if( null != command_input_stream ) {
+                        try {
+                            input_string = command_input_stream.readLine();
+
+                            if(null != input_string)
+                            {
+                                char first_character = input_string.charAt(0);
+                                boolean mode_command = Arrays.stream(commands).anyMatch(input_string::equals);
+
+//                                showToast(input_string + " " + String.valueOf(mode_command));
+                                if( '+' == first_character )
+                                {
+                                    String message = input_string.substring(1);
+                                    showToast("CB: " + message);
+                                }
+                                else if(! mode_command )
+                                {
+                                    try {
+                                        String[] commands = input_string.split(",");
+                                        command_roll = Float.valueOf(commands[0]);
+                                        command_pitch = Float.valueOf(commands[1]);
+                                        command_yaw = Float.valueOf(commands[2]);
+                                        command_throttle = Float.valueOf(commands[3]);
+                                        command_gimbal_tilt = Float.valueOf(commands[4]);
+
+                                        data_received = true;
+
+//                                        Log.d(TAG, String.format("roll: %f ; pitch: %f ; yaw: %f ; throttle: %f ; gimbal_tilt: %f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
+                                    }
+                                    catch( Exception e )
+                                    {
+                                        e.printStackTrace();
+                                    }
+                                }
+                                else if( input_string.equals("landed") )
+                                {
+                                    notify_landed();
+                                }
+                                else if( input_string.equals("takeoff") )
+                                {
+                                    notify_takeoff();
+                                }
+                                else if( input_string.equals("search") )
+                                {
+                                    notify_search();
+                                }
+                                else if( input_string.equals("approach") )
+                                {
+                                    notify_approach();
+                                }
+                                else if( input_string.equals("landing"))
+                                {
+                                    command_land = true;
+                                    notify_landing();
+                                }
+                                else
+                                {
+                                    showToast("Received invalid command: " + input_string);
+                                }
+                            }
+
+                        } catch (Exception e) {
+                            close_sockets();
+
+                            e.printStackTrace();
                         }
                     }
-                    catch(Exception e)
-                    {
-                        e.printStackTrace();
-                    }
-
-                    if( ! command_land )
-                    {
-                        String[] commands = data.split(",");
-                        command_roll = Float.valueOf(commands[0]);
-                        command_pitch = Float.valueOf(commands[1]);
-                        command_yaw = Float.valueOf(commands[2]);
-                        command_throttle = Float.valueOf(commands[3]);
-                        command_gimbal_tilt = Float.valueOf(commands[4]);
-                    }
-                    data_received = true;
-
-//                    status_text.setText("CB: " + String.valueOf(System.currentTimeMillis()));
-
-                } catch (IOException e) {
-                    e.printStackTrace();
                 }
+            });
+            thread.start();
+        }
 
-//                Log.d(TAG, String.format("roll: %f ; pitch: %f ; yaw: %f ; throttle: %f ; gimbal_tilt: %f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
+        public void notify_landed()
+        {
+            if( null != image_output_stream )
+            {
+                String landed_string = "landed";
+
+                mode = landed_string;
+                send_bytes(image_output_stream, landed_string.getBytes());
+            }
+        }
+
+        public void notify_takeoff()
+        {
+            if( null != image_output_stream )
+            {
+                String takeoff_string = "takeoff";
+                send_bytes(image_output_stream, takeoff_string.getBytes());
+
+                mode = takeoff_string;
+            }
+        }
+
+        public void notify_search()
+        {
+            if( null != image_output_stream )
+            {
+                String search_string = "search";
+
+                mode = search_string;
+                send_bytes(image_output_stream, search_string.getBytes());
+            }
+        }
+
+        public void notify_idle_inflight()
+        {
+            if( null != image_output_stream )
+            {
+                String idle_inflight_string = "idle_inflight";
+
+                mode = idle_inflight_string;
+                send_bytes(image_output_stream, idle_inflight_string.getBytes());
+            }
+        }
+
+        public void notify_precision_hover()
+        {
+            if( null != image_output_stream )
+            {
+                String precision_hover_string = "precision_hover";
+
+                mode = precision_hover_string;
+                send_bytes(image_output_stream, precision_hover_string.getBytes());
+            }
+        }
+
+        public void notify_approach()
+        {
+            if( null != image_output_stream )
+            {
+                String approach_string = "approach";
+
+                mode = approach_string;
+                send_bytes(image_output_stream, approach_string.getBytes());
+            }
+        }
+
+        public void notify_landing()
+        {
+            if( null != image_output_stream )
+            {
+                String landing_string = "landing";
+
+                mode = landing_string;
+                send_bytes(image_output_stream, landing_string.getBytes());
             }
         }
     }

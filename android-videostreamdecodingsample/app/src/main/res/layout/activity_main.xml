@@ -33,17 +33,17 @@
         android:layout_below="@id/main_title_rl"/>
 
     <LinearLayout
-        android:layout_width="150dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
-        android:layout_alignParentLeft="true"
         android:layout_below="@id/main_title_rl"
+        android:layout_alignParentLeft="true"
         android:orientation="vertical">
 
         <Button
             android:id="@+id/virtual_sticks_enable_disable_button"
             android:layout_width="100dip"
             android:layout_height="wrap_content"
-            android:text="Virtual Sticks: DISABLED"
+            android:text="Virtual Sticks"
             android:textAlignment="center" />
 
         <androidx.constraintlayout.widget.Barrier
@@ -76,11 +76,17 @@
 
         <EditText
             android:id="@+id/cb_address_text"
-            android:layout_width="wrap_content"
+            android:layout_width="250dip"
             android:layout_height="wrap_content"
             android:ems="10"
             android:inputType="textPersonName"
-            android:text="192.168.1.115" />
+            android:text="192.168.50.185" />
+
+        <TextView
+            android:id="@+id/mode_textview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="uninitialized" />
 
         <Button
             android:id="@+id/activity_main_screen_texture"
@@ -219,7 +225,7 @@
             android:layout_width="400dip"
             android:layout_height="40dip"
             android:layout_gravity="center_vertical"
-            android:max="85000"
+            android:max="1000"
             android:progress="500"
             android:rotation="270"
             android:translationX="1000dip" />

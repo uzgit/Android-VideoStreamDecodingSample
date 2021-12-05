@@ -74,6 +74,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
     private AtomicBoolean isRegistrationInProgress = new AtomicBoolean(false);
     private List<String> missingPermission = new ArrayList<>();
 
+    private boolean called_open = false;
 
     //region Registration n' Permissions Helpers
 
@@ -108,19 +109,12 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
                         @Override
                         public void onRegister(DJIError djiError) {
                             if (djiError == DJISDKError.REGISTRATION_SUCCESS) {
-                                DJILog.e("App registration", DJISDKError.REGISTRATION_SUCCESS.getDescription());
+                                showToast("Registering SDK...");
                                 DJISDKManager.getInstance().startConnectionToProduct();
-                                showToast("Register SDK Success");
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        //loginDJIUserAccount();
-                                    }
-                                });
+                                showToast("SDK Registration Success!");
                             } else {
-                                showToast("Register sdk fails, check network is available");
+                                showToast("SDK Registration failed!");
                             }
-                            Log.v(TAG, djiError.getDescription());
                             isRegistrationInProgress.set(false);
                         }
 
@@ -180,27 +174,11 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
         }
     }
 
-    private void loginDJIUserAccount() {
-
-        UserAccountManager.getInstance().logIntoDJIUserAccount(this,
-                new CommonCallbacks.CompletionCallbackWith<UserAccountState>() {
-                    @Override
-                    public void onSuccess(final UserAccountState userAccountState) {
-                        showToast("login success! Account state is:" +userAccountState.name());
-                    }
-
-                    @Override
-                    public void onFailure(DJIError error) {
-                        showToast(error.getDescription());
-                    }
-                });
-
-    }
-
     private void notifyStatusChange() {
         runOnUiThread(new Runnable() {
             @Override
-            public void run() {
+            public void run()
+            {
                 refreshSDKRelativeUI();
             }
         });
@@ -267,6 +245,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
         mBtnOpen.setEnabled(false);
         ((TextView)findViewById(R.id.textView2)).setText(getResources().getString(R.string.sdk_version, DJISDKManager.getInstance().getSDKVersion()));
 
+        showToast("Initializing UI..." );
     }
 
     private void updateTitleBar() {
@@ -338,10 +317,9 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
     private void refreshSDKRelativeUI() {
 
         BaseProduct mProduct = VideoDecodingApplication.getProductInstance();
-        Log.v(TAG, "refreshSDKRelativeUI");
 
         if (null != mProduct && mProduct.isConnected()) {
-            Log.v(TAG, "refreshSDK: True");
+
             mBtnOpen.setEnabled(true);
 
             String str = mProduct instanceof Aircraft ? "DJIAircraft" : "DJIHandHeld";
@@ -356,8 +334,13 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
                 KeyManager.getInstance().addListener(firmkey, firmVersionListener);
             }
 
-            Intent intent = new Intent(this, MainActivity.class);
-            startActivity(intent);
+            if( mBtnOpen.isEnabled() && ! called_open )
+            {
+                called_open = true;
+                mBtnOpen.callOnClick();
+            }
+//            Intent intent = new Intent(this, MainActivity.class);
+//            startActivity(intent);
         } else {
             Log.v(TAG, "refreshSDK: False");
             mBtnOpen.setEnabled(false);
