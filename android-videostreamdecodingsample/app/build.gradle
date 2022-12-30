@@ -12,7 +12,7 @@ android {
     defaultConfig {
         applicationId "com.dji.videostreamdecodingsample"
         minSdkVersion 19
-        targetSdkVersion 31
+        targetSdkVersion 30
         multiDexEnabled true
         ndk {
             // On x86 devices that run Android API 23 or above, if the application is targeted with API 23 or
