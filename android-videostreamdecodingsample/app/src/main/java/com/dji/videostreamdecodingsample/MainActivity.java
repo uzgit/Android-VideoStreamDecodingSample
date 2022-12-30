@@ -48,7 +48,14 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintWriter;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -480,10 +487,17 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
         });
 
-        if (null == connectCompanionBoardTask) {
-            connectCompanionBoardTask = new ConnectCompanionBoardTask();
-            connectCompanionBoardTaskTimer = new Timer();
-            connectCompanionBoardTaskTimer.schedule(connectCompanionBoardTask, 100, 50);
+        if (null == connectCompanionBoardTask)
+        {
+            Thread thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    connectCompanionBoardTask = new ConnectCompanionBoardTask();
+                    connectCompanionBoardTaskTimer = new Timer();
+                    connectCompanionBoardTaskTimer.schedule(connectCompanionBoardTask, 100, 100);
+                }
+            });
+            thread.start();
         }
 
         if (null == actuateTask) {
@@ -1224,12 +1238,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private class ConnectCompanionBoardTask extends TimerTask {
 
-//        private String host = "192.168.1.115";
-//        private String host = "192.168.1.21";
-//        private String host = "192.168.50.185";
-        private String host;
+        private String host = "192.168.1.99";
         private String image_port = "14555";
-        private String command_port  = "14556";
 
         private boolean notified_disconnected = false;
         private boolean notified_connected = false;
@@ -1237,6 +1247,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         long send_limit = 100;
         long last_send_time;
 
+        DatagramSocket udp_image_socket = null;
         Socket image_socket = null;
         Socket command_socket = null;
 
@@ -1249,12 +1260,75 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         private Bitmap image_to_send = null;
         private String input_string = null;
+        InetAddress address;
 
         ConnectCompanionBoardTask()
         {
             super();
 
-            last_send_time = System.currentTimeMillis();
+//            try {
+//                udp_image_socket = new DatagramSocket();
+//                address = InetAddress.getByName("gcs.local");
+//                last_send_time = System.currentTimeMillis();
+//            }
+//            catch(Exception e)
+//            {
+//                showToast(e.toString());
+//            }
+        }
+
+        @Override
+        public void run() {
+
+            // make sure the port is open
+            try
+            {
+                udp_image_socket = new DatagramSocket();
+                address = InetAddress.getByName("gcs.local");
+                udp_image_socket.setSoTimeout(1500);
+
+                last_send_time = System.currentTimeMillis();
+            }
+            catch(Exception e)
+            {
+                showToast(e.toString());
+            }
+
+            // send a request (image) and get a response (commands)
+            if( null != image_to_send ) {
+                try {
+//                    byte[] buf = new byte[256];
+//                    String request = "lalala";
+//                    buf = request.getBytes();
+//                    DatagramPacket packet = new DatagramPacket(buf, buf.length, address, 14555);
+//                    udp_image_socket.send(packet);
+
+                    // send image here
+                    Bitmap image_to_send_copy = image_to_send.copy(image_to_send.getConfig(), false);
+                    image_to_send = null;
+                    Bitmap bitmap_image = toGrayScale(image_to_send_copy);
+                    ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+//                        bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
+                        bitmap_image.compress(Bitmap.CompressFormat.JPEG, 50, byte_stream);
+                    }
+                    byte[] image_byte_array = byte_stream.toByteArray();
+//                    int size = byte_array.length;
+//                    byte[] size_bytes = ByteBuffer.allocate(4).putInt(size).array();
+                    DatagramPacket packet = new DatagramPacket( image_byte_array, image_byte_array.length, address, 14555);
+                    udp_image_socket.send(packet);
+//                    image_to_send = null;
+
+                    udp_image_socket.receive(packet);
+                    String received = new String(packet.getData(), 0, packet.getLength());
+                    showToast("Received (" + String.valueOf(packet.getLength()) + " ): " + received);
+                } catch (Exception e) {
+                    showToast(e.toString());
+                }
+            }
+//            maintain_connection();
+//            send_image();
+//            read_commands();
         }
 
         boolean is_connected()
@@ -1265,23 +1339,23 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         private void open_sockets()
         {
             try{
-                image_socket = new Socket(host, Integer.valueOf(image_port));
-                command_socket = new Socket(host, Integer.valueOf(command_port));
+//                udp_image_socket = new DatagramSocket(Integer.valueOf(image_port));
+                udp_image_socket = new DatagramSocket();
+//                InetAddress server_address = InetAddress.getByName("localhost");
 
-                image_output_stream = image_socket.getOutputStream();
-
-                command_output_stream = command_socket.getOutputStream();
-                command_input_stream = new BufferedReader(new InputStreamReader(command_socket.getInputStream()));
+                showToast("Opening socket...");
+                SocketAddress socket_address=new InetSocketAddress("192.168.1.100", 14555);
+                udp_image_socket.bind(socket_address);
+                showToast("Socket open!");
 
                 is_connected = true;
 
-                image_socket.setSoTimeout(1500);
-                command_socket.setSoTimeout(1500);
-
-                showToast("Connecting to CB...");
+                udp_image_socket.setSoTimeout(1500);
+//                showToast("Connecting to CB...");
             }
             catch( Exception e )
             {
+                showToast(e.toString());
                 close_sockets();
             }
         }
@@ -1289,7 +1363,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         private void close_sockets()
         {
             try{
-                image_socket.close();
+//                image_socket.close();
+                udp_image_socket.close();
             }
             catch( Exception e )
             {
@@ -1304,6 +1379,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 e.printStackTrace();
             }
 
+            udp_image_socket = null;
             image_socket = null;
             command_socket = null;
 
@@ -1319,8 +1395,6 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             if( ! is_connected ) {
                 // try to connect
                 try {
-                    host = cb_address_text.getText().toString();
-
                     open_sockets();
                 } catch( Exception e ) {
                     e.printStackTrace();
@@ -1370,27 +1444,25 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         //  1. initiate a connection if the connection is null
         //  2. send an image if it has been requested
         //  3.read data from the connection if it is connected
-        @Override
-        public void run()
-        {
-            maintain_connection();
 
-            send_image();
-
-            read_commands();
-        }
 
         public void send_image()
         {
+            showToast("Sending an image " + String.valueOf(System.currentTimeMillis()));
             if( null != image_to_send ) {
-                Bitmap bitmap_image = toGrayScale(image_to_send);
+
+//                Bitmap bitmap_image = toGrayScale(image_to_send);
+                Bitmap bitmap_image = image_to_send;
+
                 ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
                 }
                 byte[] image_byte_array = byte_stream.toByteArray();
 
-                send_bytes(image_output_stream, image_byte_array);
+//                send_bytes(image_output_stream, image_byte_array);
+
+                DatagramPacket packet = new DatagramPacket(image_byte_array, image_byte_array.length);
 
                 image_to_send = null;
 //                showToast("Sent" + String.valueOf(System.currentTimeMillis()));
@@ -1430,73 +1502,73 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 @RequiresApi(api = Build.VERSION_CODES.N)
                 @Override
                 public void run() {
-                    if( null != command_input_stream ) {
-                        try {
-                            input_string = command_input_stream.readLine();
-
-                            if(null != input_string)
-                            {
-                                char first_character = input_string.charAt(0);
-                                boolean mode_command = Arrays.stream(commands).anyMatch(input_string::equals);
-
-//                                showToast(input_string + " " + String.valueOf(mode_command));
-                                if( '+' == first_character )
-                                {
-                                    String message = input_string.substring(1);
-                                    showToast("CB: " + message);
-                                }
-                                else if(! mode_command )
-                                {
-                                    try {
-                                        String[] commands = input_string.split(",");
-                                        command_roll = Float.valueOf(commands[0]);
-                                        command_pitch = Float.valueOf(commands[1]);
-                                        command_yaw = Float.valueOf(commands[2]);
-                                        command_throttle = Float.valueOf(commands[3]);
-                                        command_gimbal_tilt = Float.valueOf(commands[4]);
-
-                                        data_received = true;
-
-//                                        Log.d(TAG, String.format("roll: %f ; pitch: %f ; yaw: %f ; throttle: %f ; gimbal_tilt: %f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
-                                    }
-                                    catch( Exception e )
-                                    {
-                                        e.printStackTrace();
-                                    }
-                                }
-                                else if( input_string.equals("landed") )
-                                {
-                                    notify_landed();
-                                }
-                                else if( input_string.equals("takeoff") )
-                                {
-                                    notify_takeoff();
-                                }
-                                else if( input_string.equals("search") )
-                                {
-                                    notify_search();
-                                }
-                                else if( input_string.equals("approach") )
-                                {
-                                    notify_approach();
-                                }
-                                else if( input_string.equals("landing"))
-                                {
-                                    command_land = true;
-                                    notify_landing();
-                                }
-                                else
-                                {
-                                    showToast("Received invalid command: " + input_string);
-                                }
-                            }
-
-                        } catch (Exception e) {
-                            close_sockets();
-
-                            e.printStackTrace();
-                        }
-                    }
+//                    if( null != command_input_stream ) {
+//                        try {
+//                            input_string = command_input_stream.readLine();
+//
+//                            if(null != input_string)
+//                            {
+//                                char first_character = input_string.charAt(0);
+//                                boolean mode_command = Arrays.stream(commands).anyMatch(input_string::equals);
+//
+////                                showToast(input_string + " " + String.valueOf(mode_command));
+//                                if( '+' == first_character )
+//                                {
+//                                    String message = input_string.substring(1);
+//                                    showToast("CB: " + message);
+//                                }
+//                                else if(! mode_command )
+//                                {
+//                                    try {
+//                                        String[] commands = input_string.split(",");
+//                                        command_roll = Float.valueOf(commands[0]);
+//                                        command_pitch = Float.valueOf(commands[1]);
+//                                        command_yaw = Float.valueOf(commands[2]);
+//                                        command_throttle = Float.valueOf(commands[3]);
+//                                        command_gimbal_tilt = Float.valueOf(commands[4]);
+//
+//                                        data_received = true;
+//
+////                                        Log.d(TAG, String.format("roll: %f ; pitch: %f ; yaw: %f ; throttle: %f ; gimbal_tilt: %f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
+//                                    }
+//                                    catch( Exception e )
+//                                    {
+//                                        e.printStackTrace();
+//                                    }
+//                                }
+//                                else if( input_string.equals("landed") )
+//                                {
+//                                    notify_landed();
+//                                }
+//                                else if( input_string.equals("takeoff") )
+//                                {
+//                                    notify_takeoff();
+//                                }
+//                                else if( input_string.equals("search") )
+//                                {
+//                                    notify_search();
+//                                }
+//                                else if( input_string.equals("approach") )
+//                                {
+//                                    notify_approach();
+//                                }
+//                                else if( input_string.equals("landing"))
+//                                {
+//                                    command_land = true;
+//                                    notify_landing();
+//                                }
+//                                else
+//                                {
+//                                    showToast("Received invalid command: " + input_string);
+//                                }
+//                            }
+//
+//                        } catch (Exception e) {
+//                            close_sockets();
+//
+//                            e.printStackTrace();
+//                        }
+//                    }
                 }
             });
             thread.start();

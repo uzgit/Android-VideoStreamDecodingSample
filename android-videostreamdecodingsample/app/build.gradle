@@ -12,12 +12,12 @@ android {
     defaultConfig {
         applicationId "com.dji.videostreamdecodingsample"
         minSdkVersion 19
-        targetSdkVersion 30
+        targetSdkVersion 31
         multiDexEnabled true
         ndk {
             // On x86 devices that run Android API 23 or above, if the application is targeted with API 23 or
             // above, FFmpeg lib might lead to runtime crashes or warnings.
-            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86'
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
         }
     }
 
