@@ -11,8 +11,6 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.graphics.YuvImage;
-import android.graphics.drawable.ColorDrawable;
-import android.icu.util.Output;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.os.Build;
@@ -21,7 +19,9 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.provider.Contacts;
 import android.util.Log;
+import android.view.DragEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.TextureView;
@@ -32,34 +32,26 @@ import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 
 import com.dji.videostreamdecodingsample.media.DJIVideoStreamDecoder;
 import com.dji.videostreamdecodingsample.media.NativeHelper;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Objects;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -72,29 +64,31 @@ import dji.common.flightcontroller.virtualstick.FlightCoordinateSystem;
 import dji.common.flightcontroller.virtualstick.RollPitchControlMode;
 import dji.common.flightcontroller.virtualstick.VerticalControlMode;
 import dji.common.flightcontroller.virtualstick.YawControlMode;
+import dji.common.gimbal.GimbalState;
 import dji.common.gimbal.Rotation;
 import dji.common.gimbal.RotationMode;
 import dji.common.product.Model;
 import dji.common.util.CommonCallbacks;
 import dji.sdk.airlink.OcuSyncLink;
+import dji.sdk.base.BaseComponent;
 import dji.sdk.base.BaseProduct;
 import dji.sdk.camera.Camera;
 import dji.sdk.camera.VideoFeeder;
 import dji.sdk.codec.DJICodecManager;
+import dji.sdk.gimbal.Gimbal;
 import dji.sdk.sdkmanager.DJISDKManager;
 import dji.thirdparty.afinal.core.AsyncTask;
 import dji.sdk.flightcontroller.FlightController;
 import dji.sdk.products.Aircraft;
-import dji.sdk.accessory.speaker.Speaker;
-
-import java.nio.ByteBuffer;
 
 public class MainActivity extends Activity implements DJICodecManager.YuvDataCallback, View.OnClickListener {
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int MSG_WHAT_SHOW_TOAST = 0;
     private static final int MSG_WHAT_UPDATE_TITLE = 1;
     private SurfaceHolder.Callback surfaceCallback;
-    private enum DemoType { USE_TEXTURE_VIEW, USE_SURFACE_VIEW, USE_SURFACE_VIEW_DEMO_DECODER}
+
+    private enum DemoType {USE_TEXTURE_VIEW, USE_SURFACE_VIEW, USE_SURFACE_VIEW_DEMO_DECODER}
+
     private static DemoType demoType = DemoType.USE_TEXTURE_VIEW;
     private VideoFeeder.VideoFeed standardVideoFeeder;
 
@@ -126,39 +120,50 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     private DJICodecManager mCodecManager;
     private TextView savePath;
     private TextView frame_info_text;
-    private TextView companion_board_status_text;
+    private TextView gimbal_info_text;
     private Button screenShot;
     private StringBuilder stringBuilder;
     private int videoViewWidth;
     private int videoViewHeight;
     private int count;
 
-    private ConnectCompanionBoardTask connectCompanionBoardTask;
-    private Timer connectCompanionBoardTaskTimer;
+//    private GimbalInfoTask gimbalInfoTask;
+//    private Timer gimbalInfoTaskTimer;
 
-    private ActuateTask actuateTask;
-    private Timer actuateTaskTimer;
+    private CompanionBoardConnector companionBoardConnector;
+    private Timer companionBoardConnectorTimer;
 
-    private NotifierTask notifierTask;
-    private Timer notifierTaskTimer;
+    private FCUConnector fcuConnector;
+    private Timer fcuConnectorTimer;
 
-//    private FlightControllerStateTask flightControllerStateTask;
-    private Timer flightControllerStateTaskTimer;
+    private UIActuator uiActuator;
+    private Timer uiActuatorTimer;
 
-    float command_roll;
-    float command_pitch;
-    float command_yaw;
-    float command_throttle;
-    float command_gimbal_tilt;
+    long last_command_received_time = 999;
+    double command_roll;
+    double command_pitch;
+    double command_yaw;
+    double command_throttle;
+    double command_gimbal_tilt;
     boolean command_land = false;
     boolean data_received = false;
-    boolean actuate = true;
+
+    boolean actuate_gimbal = true;
+    boolean actuate = false;
+    boolean enable_virtual_sticks = false;
+
+    boolean takeoff = false;
+    boolean takeoff_state = false;
+    boolean land;
 
     SeekBar roll_seekbar;
     SeekBar pitch_seekbar;
     SeekBar yaw_seekbar;
     SeekBar throttle_seekbar;
     SeekBar gimbal_tilt_seekbar;
+    SeekBar actuate_gimbal_seekbar;
+    SeekBar actuate_seekbar;
+    SeekBar virtual_stick_enable_seekbar;
 
     TextView roll_text;
     TextView pitch_text;
@@ -166,22 +171,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     TextView throttle_text;
     TextView gimbal_tilt_text;
 
-    TextView mode_text;
-
-    EditText cb_address_text;
-
-    Button virtual_sticks_enable_disable_button;
-    Button takeoff_button;
-    Button land_button;
-
     private Aircraft aircraft;
     private FlightController flight_controller;
-    private FlightControllerState flight_controller_state;
-
-    private String mode = "landed";
-
-    boolean enable_virtual_sticks = false;
-    boolean new_gimbal_seekbar_data = false;
 
     @Override
     protected void onResume() {
@@ -190,7 +181,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         notifyStatusChange();
     }
 
-    private void initSurfaceOrTextureView(){
+    private void initSurfaceOrTextureView() {
         switch (demoType) {
             case USE_SURFACE_VIEW:
                 initPreviewerSurfaceView();
@@ -240,6 +231,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
+
+        int i = 0;
+
         initUiMain();
         if (isM300Product()) {
             OcuSyncLink ocuSyncLink = VideoDecodingApplication.getProductInstance().getAirLink().getOcuSyncLink();
@@ -250,7 +244,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     if (error == null) {
                         showToast("assignSourceToPrimaryChannel success.");
                     } else {
-                        showToast("assignSourceToPrimaryChannel fail, reason: "+ error.getDescription());
+                        showToast("assignSourceToPrimaryChannel fail, reason: " + error.getDescription());
                     }
                 }
             });
@@ -279,90 +273,26 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private void initUiMain() {
 
-        cb_address_text = (EditText) findViewById(R.id.cb_address_text);
-
         aircraft = (Aircraft) VideoDecodingApplication.getProductInstance();
         flight_controller = aircraft.getFlightController();
 
         frame_info_text = (TextView) findViewById(R.id.frame_info_textview);
         frame_info_text.setText("Initializing...");
 
-        mode_text = (TextView) findViewById(R.id.mode_textview);
-        mode_text.setText("initializing...");
-
-        companion_board_status_text = (TextView) findViewById(R.id.companion_board_status_textview);
-
-        savePath = (TextView) findViewById(R.id.activity_main_save_path);
-        screenShot = (Button) findViewById(R.id.activity_main_screen_shot);
-        screenShot.setSelected(false);
+        gimbal_info_text = (TextView) findViewById(R.id.gimbal_info_textview);
 
         titleTv = (TextView) findViewById(R.id.title_tv);
         videostreamPreviewTtView = (TextureView) findViewById(R.id.livestream_preview_ttv);
         videostreamPreviewSf = (SurfaceView) findViewById(R.id.livestream_preview_sf);
-        videostreamPreviewSf.setClickable(true);
-        videostreamPreviewSf.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                float rate = VideoFeeder.getInstance().getTranscodingDataRate();
-                showToast("current rate:" + rate + "Mbps");
-                if (rate < 10) {
-                    VideoFeeder.getInstance().setTranscodingDataRate(10.0f);
-                    showToast("set rate to 10Mbps");
-                } else {
-                    VideoFeeder.getInstance().setTranscodingDataRate(3.0f);
-                    showToast("set rate to 3Mbps");
-                }
-            }
-        });
-
-        virtual_sticks_enable_disable_button = (Button) findViewById(R.id.virtual_sticks_enable_disable_button);
-        takeoff_button = (Button) findViewById(R.id.takeoff_button);
-        land_button = (Button) findViewById(R.id.land_button);
-
-//
-//        virtual_sticks_enable_disable_button.setOnClickListener(new View.OnClickListener() {
-//            @Override
-//            public void onClick(View view) {
-//
-//                enable_virtual_sticks = ! enable_virtual_sticks;
-//
-//                if( enable_virtual_sticks )
-//                {
-//                    flight_controller.setVirtualStickModeEnabled(enable_virtual_sticks, new CommonCallbacks.CompletionCallback() {
-//                        @Override
-//                        public void onResult(DJIError djiError) {
-//                            if( null == djiError )
-//                            {
-//                                enable_virtual_sticks = false;
-//                            }
-//                        }
-//                    });
-//                }
-//                else
-//                {
-//                    flight_controller.setVirtualStickModeEnabled(enable_virtual_sticks, new CommonCallbacks.CompletionCallback() {
-//                        @Override
-//                        public void onResult(DJIError djiError)
-//                        {
-//                            if( null == djiError )
-//                            {
-//                                enable_virtual_sticks = true;
-//                            }
-//                        }
-//                    });
-//                }
-//            }
-//        });
-
-        virtual_sticks_enable_disable_button.setOnClickListener(this);
-        takeoff_button.setOnClickListener(this);
-        land_button.setOnClickListener(this);
 
         roll_seekbar = (SeekBar) findViewById(R.id.roll_seekbar);
         pitch_seekbar = (SeekBar) findViewById(R.id.pitch_seekbar);
         yaw_seekbar = (SeekBar) findViewById(R.id.yaw_seekbar);
         throttle_seekbar = (SeekBar) findViewById(R.id.throttle_seekbar);
         gimbal_tilt_seekbar = (SeekBar) findViewById(R.id.gimbal_tilt_seekbar);
+        actuate_gimbal_seekbar = (SeekBar) findViewById(R.id.actuate_gimbal_seekbar);
+        actuate_seekbar = (SeekBar) findViewById(R.id.actuate_seekbar);
+        virtual_stick_enable_seekbar = (SeekBar) findViewById(R.id.virtual_stick_enable_seekbar);
 
         roll_text = (TextView) findViewById(R.id.roll_textview);
         pitch_text = (TextView) findViewById(R.id.pitch_textview);
@@ -374,12 +304,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-                float range = seekBar.getMax();
-                float idle = range / (float) 2.0;
-                float control = 2 * ((float) progress - idle) / range;
+                double range = seekBar.getMax();
+                double idle = range / (float) 2.0;
+                double control = 2 * ((float) progress - idle) / range;
 
                 command_roll = control;
-                roll_text.setText("Roll: " + String.valueOf(command_roll));
             }
 
             @Override
@@ -388,7 +317,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                float idle = seekBar.getMax() / (float) 2.0;
+                double idle = seekBar.getMax() / (double) 2.0;
                 seekBar.setProgress((int) idle);
             }
         });
@@ -397,12 +326,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-                float range = seekBar.getMax();
-                float idle = range / (float) 2.0;
-                float control = 2 * ((float) progress - idle) / range;
+                double range = seekBar.getMax();
+                double idle = range / (double) 2.0;
+                double control = 2 * ((double) progress - idle) / range;
 
                 command_pitch = control;
-                pitch_text.setText("Pitch: " + String.valueOf(command_pitch));
             }
 
             @Override
@@ -411,7 +339,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                float idle = seekBar.getMax() / (float) 2.0;
+                double idle = seekBar.getMax() / (double) 2.0;
                 seekBar.setProgress((int) idle);
             }
         });
@@ -420,12 +348,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-                float range = seekBar.getMax();
-                float idle = range / (float) 2.0;
-                float control = 2 * ((float) progress - idle) / range;
+                double range = seekBar.getMax();
+                double idle = range / (double) 2.0;
+                double control = 2 * ((double) progress - idle) / range;
 
                 command_yaw = control;
-                yaw_text.setText("Yaw: " + String.valueOf(command_yaw));
             }
 
             @Override
@@ -434,7 +361,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                float idle = seekBar.getMax() / (float) 2.0;
+                double idle = seekBar.getMax() / (double) 2.0;
                 seekBar.setProgress((int) idle);
             }
         });
@@ -443,12 +370,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-                float range = seekBar.getMax();
-                float idle = range / (float) 2.0;
-                float control = 2 * ((float) progress - idle) / range;
+                double range = seekBar.getMax();
+                double idle = range / (double) 2.0;
+                double control = 2 * ((double) progress - idle) / range;
 
                 command_throttle = control;
-                throttle_text.setText("Throttle: " + String.valueOf(command_throttle));
             }
 
             @Override
@@ -457,7 +383,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                float idle = seekBar.getMax() / (float) 2.0;
+                double idle = seekBar.getMax() / (double) 2.0;
                 seekBar.setProgress((int) idle);
             }
         });
@@ -466,14 +392,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 // we assume progress \in [0, seekBar.getMax()]
-                float range = seekBar.getMax();
-                float idle = range / (float)2.0;
-                float control = 2 * ((float) progress - idle) / range;
+                double range = seekBar.getMax();
+                double idle = range / (double) 2.0;
+                double control = 2 * ((double) progress - idle) / range;
 
                 command_gimbal_tilt = control;
-                gimbal_tilt_text.setText("Gimbal Tilt: " + String.valueOf(command_gimbal_tilt));
-
-//                new_gimbal_seekbar_data = true;
             }
 
             @Override
@@ -482,74 +405,139 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                float idle = seekBar.getMax() / (float) 2.0;
+                double idle = seekBar.getMax() / (double) 2.0;
                 seekBar.setProgress((int) idle);
             }
         });
 
-        if (null == connectCompanionBoardTask)
-        {
+        actuate_gimbal_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                actuate_gimbal = progress == 1;
+
+                if( ! actuate_gimbal )
+                {
+                    uiActuator.zero_gimbal_tilt();
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+
+        });
+
+        actuate_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                actuate = progress == 1;
+
+                if( ! actuate )
+                {
+                    uiActuator.zero_main_controls();
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+
+        });
+
+        virtual_stick_enable_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                enable_virtual_sticks = progress == 1;
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+
+        });
+
+        if (null == companionBoardConnector) {
             Thread thread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    connectCompanionBoardTask = new ConnectCompanionBoardTask();
-                    connectCompanionBoardTaskTimer = new Timer();
-                    connectCompanionBoardTaskTimer.schedule(connectCompanionBoardTask, 100, 100);
+                    companionBoardConnector = new CompanionBoardConnector();
+                    companionBoardConnectorTimer = new Timer();
+                    companionBoardConnectorTimer.schedule(companionBoardConnector, 100, 100);
                 }
             });
             thread.start();
         }
 
-        if (null == actuateTask) {
-            actuateTask = new ActuateTask();
-            actuateTaskTimer = new Timer();
-            actuateTaskTimer.schedule(actuateTask, 100, 100);
+        if( null == fcuConnector )
+        {
+            fcuConnector = new FCUConnector();
+            fcuConnectorTimer = new Timer();
+            fcuConnectorTimer.schedule(fcuConnector, 100, 100);
         }
 
-        if( null == notifierTask )
-        {
-            notifierTask = new NotifierTask();
-            notifierTaskTimer = new Timer();
-            notifierTaskTimer.schedule(notifierTask, 100, 50);
+        if (null == uiActuator) {
+            uiActuator = new UIActuator();
+            uiActuatorTimer = new Timer();
+            uiActuatorTimer.schedule(uiActuator, 100, 100);
         }
 
-        if( null == flightControllerStateTaskTimer )
-        {
-            flightControllerStateTaskTimer = new Timer();
-            flightControllerStateTaskTimer.schedule(new TimerTask() {
-                @Override
-                public void run()
-                {
-                    flight_controller_state = flight_controller.getState();
+        GimbalState.Callback gimbal_state_callback = new GimbalState.Callback() {
+            @Override
+            public void onUpdate(@NonNull GimbalState gimbalState) {
+                try {
+
+                    double roll = gimbalState.getAttitudeInDegrees().getRoll();
+                    double pitch = gimbalState.getAttitudeInDegrees().getPitch();
+                    double yaw = gimbalState.getYawRelativeToAircraftHeading();
+
+                    String info_text_string = String.format("RPY: %.2f, %.2f, %.2f", roll, pitch, yaw);
+                    gimbal_info_text.setText(info_text_string);
                 }
-            }, 100, 1000);
-        }
+                catch(Exception e)
+                {
+                    showToast(e.toString());
+                }
+            }
+        };
+        VideoDecodingApplication.getProductInstance().getGimbal().setStateCallback(gimbal_state_callback);
 
         set_default_modes();
 
         updateUIVisibility();
     }
 
-    private void set_default_modes(){
+    private void set_default_modes() {
         flight_controller.setRollPitchControlMode(RollPitchControlMode.VELOCITY);
         flight_controller.setYawControlMode(YawControlMode.ANGULAR_VELOCITY);
         flight_controller.setVerticalControlMode(VerticalControlMode.VELOCITY);
         flight_controller.setRollPitchCoordinateSystem(FlightCoordinateSystem.BODY);
     }
 
-    private void updateUIVisibility(){
+    private void updateUIVisibility() {
         switch (demoType) {
-            case USE_SURFACE_VIEW:
-                videostreamPreviewSf.setVisibility(View.VISIBLE);
-                videostreamPreviewTtView.setVisibility(View.GONE);
-                break;
-            case USE_SURFACE_VIEW_DEMO_DECODER:
-                /**
-                 * we need display two video stream at the same time, so we need let them to be visible.
-                 */
-                videostreamPreviewSf.setVisibility(View.VISIBLE);
-                videostreamPreviewTtView.setVisibility(View.VISIBLE);
-                break;
+//            case USE_SURFACE_VIEW:
+//                videostreamPreviewSf.setVisibility(View.VISIBLE);
+//                videostreamPreviewTtView.setVisibility(View.GONE);
+//                break;
+//            case USE_SURFACE_VIEW_DEMO_DECODER:
+//                /**
+//                 * we need display two video stream at the same time, so we need let them to be visible.
+//                 */
+//                videostreamPreviewSf.setVisibility(View.VISIBLE);
+//                videostreamPreviewTtView.setVisibility(View.VISIBLE);
+//                break;
 
             case USE_TEXTURE_VIEW:
                 videostreamPreviewSf.setVisibility(View.GONE);
@@ -557,14 +545,17 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 break;
         }
     }
+
     private long lastupdate;
+
     private void notifyStatusChange() {
 
         final BaseProduct product = VideoDecodingApplication.getProductInstance();
 
         Log.d(TAG, "notifyStatusChange: " + (product == null ? "Disconnect" : (product.getModel() == null ? "null model" : product.getModel().name())));
         if (product != null && product.isConnected() && product.getModel() != null) {
-            updateTitle(product.getModel().name() + " Connected " + demoType.name());
+//            updateTitle(product.getModel().name() + " Connected " + demoType.name());
+            updateTitle(String.format("Autonomous Landing Demo: %s", product.getModel().getDisplayName()));
         } else {
             updateTitle("Disconnected");
         }
@@ -612,7 +603,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     @Override
                     public void onResult(DJIError djiError) {
                         if (djiError != null) {
-                            showToast("can't change mode of camera, error:"+djiError.getDescription());
+                            showToast("can't change mode of camera, error:" + djiError.getDescription());
                         }
                     }
                 });
@@ -624,7 +615,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     standardVideoFeeder.addVideoDataListener(mReceivedVideoDataListener);
                     return;
                 }
-                if (VideoFeeder.getInstance().getPrimaryVideoFeed() != null) {
+                if (VideoFeeder.getInstance().getPrimaryVideoFeed() != null)
+                {
                     VideoFeeder.getInstance().getPrimaryVideoFeed().addVideoDataListener(mReceivedVideoDataListener);
                 }
 
@@ -669,7 +661,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             @Override
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
                 frame_info_text.setText(String.valueOf(System.currentTimeMillis()));
-                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
+
+                companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
+//                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
             }
         });
     }
@@ -690,7 +684,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     case USE_SURFACE_VIEW:
                         if (mCodecManager == null) {
                             mCodecManager = new DJICodecManager(getApplicationContext(), holder, videoViewWidth,
-                                                                videoViewHeight);
+                                    videoViewHeight);
                         }
                         break;
                     case USE_SURFACE_VIEW_DEMO_DECODER:
@@ -741,7 +735,6 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         videostreamPreviewSh.addCallback(surfaceCallback);
     }
 
-
     @Override
     public void onYuvDataReceived(MediaFormat format, final ByteBuffer yuvFrame, int dataSize, final int width, final int height) {
         //In this demo, we test the YUV data by saving it into JPG files.
@@ -778,7 +771,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     }
 
     // For android API <= 23
-    private void oldSaveYuvDataToJPEG(byte[] yuvFrame, int width, int height){
+    private void oldSaveYuvDataToJPEG(byte[] yuvFrame, int width, int height) {
         if (yuvFrame.length < width * height) {
             //DJILog.d(TAG, "yuvFrame size is too small " + yuvFrame.length);
             return;
@@ -821,14 +814,14 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             bytes[y.length + (i * 2) + 1] = nu[i];
         }
         Log.d(TAG,
-              "onYuvDataReceived: frame index: "
-                  + DJIVideoStreamDecoder.getInstance().frameIndex
-                  + ",array length: "
-                  + bytes.length);
+                "onYuvDataReceived: frame index: "
+                        + DJIVideoStreamDecoder.getInstance().frameIndex
+                        + ",array length: "
+                        + bytes.length);
         screenShot(bytes, Environment.getExternalStorageDirectory() + "/DJI_ScreenShot", width, height);
     }
 
-    private void newSaveYuvDataToJPEG(byte[] yuvFrame, int width, int height){
+    private void newSaveYuvDataToJPEG(byte[] yuvFrame, int width, int height) {
         if (yuvFrame.length < width * height) {
             //DJILog.d(TAG, "yuvFrame size is too small " + yuvFrame.length);
             return;
@@ -845,7 +838,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             yuvFrame[length + 2 * i] = u[i];
             yuvFrame[length + 2 * i + 1] = v[i];
         }
-        screenShot(yuvFrame,Environment.getExternalStorageDirectory() + "/DJI_ScreenShot", width, height);
+        screenShot(yuvFrame, Environment.getExternalStorageDirectory() + "/DJI_ScreenShot", width, height);
     }
 
     private void newSaveYuvDataToJPEG420P(byte[] yuvFrame, int width, int height) {
@@ -857,7 +850,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         byte[] u = new byte[width * height / 4];
         byte[] v = new byte[width * height / 4];
 
-        for (int i = 0; i < u.length; i ++) {
+        for (int i = 0; i < u.length; i++) {
             u[i] = yuvFrame[length + i];
             v[i] = yuvFrame[length + u.length + i];
         }
@@ -913,134 +906,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     public void onClick(View v) {
         switch (v.getId()) {
 
-            case R.id.activity_main_screen_shot:
-                handleYUVClick();
-                break;
-
-            case R.id.virtual_sticks_enable_disable_button:
-
-                enable_virtual_sticks = ! enable_virtual_sticks;
-
-                virtual_sticks_enable_disable_button.setBackgroundColor(Color.GREEN);
-                flight_controller.setVirtualStickModeEnabled(enable_virtual_sticks, new CommonCallbacks.CompletionCallback() {
-                    @Override
-                    public void onResult(DJIError djiError) {
-                        if (null == djiError)
-                        {
-                            virtual_sticks_enable_disable_button.setBackgroundColor(Color.GRAY);
-                        }
-                        else
-                        {
-                            virtual_sticks_enable_disable_button.setBackgroundColor(Color.RED);
-                        }
-                    }
-                });
-                break;
-
-            case R.id.takeoff_button:
-
-                connectCompanionBoardTask.notify_takeoff();
-
-                takeoff_button.setBackgroundColor(Color.GREEN);
-                flight_controller.startTakeoff(new CommonCallbacks.CompletionCallback() {
-                    @Override
-                    public void onResult(DJIError djiError) {
-                        if( null == djiError )
-                        {
-                            takeoff_button.setBackgroundColor(Color.GRAY);
-                        }
-                        else
-                        {
-                            takeoff_button.setBackgroundColor(Color.RED);
-                        }
-                    }
-                });
-                break;
-
-            case R.id.land_button:
-
-                connectCompanionBoardTask.notify_landing();
-
-                land_button.setBackgroundColor(Color.GREEN);
-                flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
-                    @Override
-                    public void onResult(DJIError djiError) {
-                        if( null == djiError )
-                        {
-                            land_button.setBackgroundColor(Color.GRAY);
-                        }
-                        else
-                        {
-                            land_button.setBackgroundColor(Color.RED);
-                        }
-                    }
-                });
-                break;
-
             default:
-                DemoType newDemoType = null;
-                if (v.getId() == R.id.activity_main_screen_texture) {
-                    newDemoType = DemoType.USE_TEXTURE_VIEW;
-                } else if (v.getId() == R.id.activity_main_screen_surface) {
-                    newDemoType = DemoType.USE_SURFACE_VIEW;
-                } else if (v.getId() == R.id.activity_main_screen_surface_with_own_decoder) {
-                    newDemoType = DemoType.USE_SURFACE_VIEW_DEMO_DECODER;
-                }
-
-                if (newDemoType != null && newDemoType != demoType) {
-                    // Although finish will trigger onDestroy() is called, but it is not called before OnCreate of new activity.
-                    if (mCodecManager != null) {
-                        mCodecManager.cleanSurface();
-                        mCodecManager.destroyCodec();
-                        mCodecManager = null;
-                    }
-                    demoType = newDemoType;
-                    finish();
-                    overridePendingTransition(0, 0);
-                    startActivity(getIntent());
-                    overridePendingTransition(0, 0);
-                }
                 break;
-        }
-    }
-
-    private void handleYUVClick() {
-        if (screenShot.isSelected()) {
-            screenShot.setText("YUV Screen Shot");
-            screenShot.setSelected(false);
-
-            switch (demoType) {
-                case USE_SURFACE_VIEW:
-                case USE_TEXTURE_VIEW:
-                    mCodecManager.enabledYuvData(false);
-                    mCodecManager.setYuvDataCallback(null);
-                    // ToDo:
-                    break;
-                case USE_SURFACE_VIEW_DEMO_DECODER:
-                    DJIVideoStreamDecoder.getInstance().changeSurface(videostreamPreviewSh.getSurface());
-                    DJIVideoStreamDecoder.getInstance().setYuvDataListener(null);
-                    break;
-            }
-            savePath.setText("");
-            savePath.setVisibility(View.INVISIBLE);
-            stringBuilder = null;
-        } else {
-            screenShot.setText("Live Stream");
-            screenShot.setSelected(true);
-
-            switch (demoType) {
-                case USE_TEXTURE_VIEW:
-                case USE_SURFACE_VIEW:
-                    mCodecManager.enabledYuvData(true);
-                    mCodecManager.setYuvDataCallback(this);
-                    break;
-                case USE_SURFACE_VIEW_DEMO_DECODER:
-                    DJIVideoStreamDecoder.getInstance().changeSurface(null);
-                    DJIVideoStreamDecoder.getInstance().setYuvDataListener(MainActivity.this);
-                    break;
-            }
-            savePath.setText("");
-            savePath.setVisibility(View.VISIBLE);
         }
     }
 
@@ -1060,144 +927,23 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         }
 
         return VideoFeeder.getInstance().isFetchKeyFrameNeeded() || VideoFeeder.getInstance()
-                                                                               .isLensDistortionCalibrationNeeded();
+                .isLensDistortionCalibrationNeeded();
     }
 
-    private class NotifierTask extends TimerTask {
-        public void run()
+    private class FCUConnector extends TimerTask {
+
+        public FCUConnector()
         {
-            if( enable_virtual_sticks )
-            {
-                virtual_sticks_enable_disable_button.setBackgroundColor(Color.GREEN);
-            }
-            else
-            {
-                virtual_sticks_enable_disable_button.setBackgroundColor(Color.GRAY);
-            }
-
-            if( connectCompanionBoardTask.is_connected() )
-            {
-                companion_board_status_text.setText("CB connected!");
-            }
-            else
-            {
-                companion_board_status_text.setText("CB disconnected!");
-            }
-
-            if( mode.equals("landing") && ! flight_controller_state.areMotorsOn() )
-            {
-                connectCompanionBoardTask.notify_landed();
-            }
-            else if( mode.equals("takeoff") && flight_controller_state.isFlying() )
-            {
-                connectCompanionBoardTask.notify_precision_hover();
-            }
-
-            if( ! mode.equals(mode_text.getText())) {
-                try {
-                    mode_text.setText("Mode: " + String.valueOf(mode));
-                } catch (Exception e) {
-                    showToast(e.toString());
-                    showToast(mode);
-                }
-            }
-        }
-    }
-
-    private class ActuateTask extends TimerTask {
-
-        private int control_to_progress(float control, float control_min, float control_max, int progress_min, int progress_max)
-        {
-            int progress = (int)(progress_min + (control - control_min)*(progress_max - progress_min)/(control_max - control_min));
-
-            return progress;
-        }
-
-        private int constrain(int progress, int max)
-        {
-            int result = progress;
-            if( result < 0 )
-            {
-                result = 0;
-            }
-            else if( result > max )
-            {
-                result = max;
-            }
-
-            return result;
-        }
-
-        private int constrain(int progress, SeekBar seekbar)
-        {
-            int result = progress;
-
-            if( result < 0 )
-            {
-                result = 0;
-            }
-            else if( result > seekbar.getMax() )
-            {
-                result = seekbar.getMax();
-            }
-
-            return result;
+            super();
         }
 
         @Override
         public void run()
         {
-//            Log.d(TAG, String.valueOf(actuate) + "     " + String.valueOf(data_received));
-
-            if( actuate && data_received )
+            if( actuate_gimbal )
             {
                 try {
-                    data_received = false;
-
-                    roll_seekbar.setProgress(constrain(control_to_progress(command_roll, (float) -1.0, (float) 1.0, 0, roll_seekbar.getMax()), roll_seekbar));
-                    pitch_seekbar.setProgress(constrain(control_to_progress(command_pitch, (float) -1.0, (float) 1.0, 0, pitch_seekbar.getMax()), pitch_seekbar));
-                    yaw_seekbar.setProgress(constrain(control_to_progress(command_yaw, (float) -1.0, (float) 1.0, 0, yaw_seekbar.getMax()), yaw_seekbar));
-                    throttle_seekbar.setProgress(constrain(control_to_progress(command_throttle, (float) -1.0, (float) 1.0, 0, throttle_seekbar.getMax()), throttle_seekbar));
-//                    gimbal_tilt_seekbar.setProgress( constrain( (int)command_gimbal_tilt*(-1000), 85000));
-                    gimbal_tilt_seekbar.setProgress(constrain(control_to_progress(command_gimbal_tilt, (float) -1.0, (float) 1.0, 0, gimbal_tilt_seekbar.getMax()), gimbal_tilt_seekbar));
-//                    frame_info_text.setText("Actuating!");
-
-//                    showToast("Actuating...");
-//                    Log.d(TAG, String.format("**************************************************************** roll: %.4f, pitch: %.4f, yaw: %.4f, throttle: %.4f, gimbal_tilt:%.4f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
-                }
-                catch( Exception e )
-                {
-                    Log.d(TAG, "actuation error");
-                }
-            }
-
-            if( command_land && actuate && enable_virtual_sticks )//&& actuate && data_received )// && enable_virtual_sticks )
-            {
-                command_land = false;
-
-                if( flight_controller_state != null && flight_controller_state.areMotorsOn() ) {
-                    flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
-                        @Override
-                        public void onResult(DJIError djiError) {
-                            if (null == djiError) {
-//                            land_button.setBackgroundColor(Color.GRAY);
-                            } else {
-//                            land_button.setBackgroundColor(Color.RED);
-                            }
-                        }
-                    });
-                }
-                else
-                {
-                    connectCompanionBoardTask.notify_landed();
-                }
-            }
-
-            if( actuate )//&& (data_received || new_gimbal_seekbar_data ) )
-            {
-                try
-                {
-                    VideoDecodingApplication.getProductInstance().getGimbal().rotate(new Rotation.Builder().pitch(100 * command_gimbal_tilt)
+                    VideoDecodingApplication.getProductInstance().getGimbal().rotate(new Rotation.Builder().pitch( 100 * (float) command_gimbal_tilt)
                             .mode(RotationMode.SPEED)
                             .yaw(Rotation.NO_ROTATION)
                             .roll(Rotation.NO_ROTATION)
@@ -1208,53 +954,124 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
                         }
                     });
-
-                    new_gimbal_seekbar_data = false;
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
-            if( enable_virtual_sticks )
-            {
-                try
-                {
-                    FlightControlData flight_control_data = new FlightControlData(command_roll, command_pitch, 50 * command_yaw, command_throttle);
-                    flight_controller.sendVirtualStickFlightControlData(flight_control_data, new CommonCallbacks.CompletionCallback() {
-                        @Override
-                        public void onResult(DJIError djiError) {
-
-                        }
-                    });
-                }
-                catch( Exception e )
-                {
-                    e.printStackTrace();
+                } catch (Exception e) {
+                    showToast(e.toString());
                 }
             }
         }
     }
 
-    private class ConnectCompanionBoardTask extends TimerTask {
+    // task to update the sliders to visualize the desired control outputs
+    private class UIActuator extends TimerTask {
 
-        private String host = "192.168.1.99";
-        private String image_port = "14555";
+        private int control_to_progress(float control, float control_min, float control_max, int progress_min, int progress_max) {
+            int progress = (int) (progress_min + (control - control_min) * (progress_max - progress_min) / (control_max - control_min));
 
-        private boolean notified_disconnected = false;
-        private boolean notified_connected = false;
+            return progress;
+        }
 
-        long send_limit = 100;
+        private double linear_interpolate( double input, double input_min, double input_max, double output_min, double output_max)
+        {
+            return output_min + (input - input_min) * (output_max - output_min) / (input_max - input_min);
+        }
+
+        private int constrain(int progress, int max) {
+            int result = progress;
+            if (result < 0) {
+                result = 0;
+            } else if (result > max) {
+                result = max;
+            }
+
+            return result;
+        }
+
+        private int constrain(int progress, SeekBar seekbar) {
+            int result = progress;
+
+            if (result < 0) {
+                result = 0;
+            } else if (result > seekbar.getMax()) {
+                result = seekbar.getMax();
+            }
+
+            return result;
+        }
+
+        private double constrain( double input, double min, double max )
+        {
+            double result = input;
+            if( result < min )
+            {
+                result = min;
+            }
+            if( result > max )
+            {
+                result = max;
+            }
+
+            return result;
+        }
+
+        @Override
+        public void run()
+        {
+
+            try {
+                gimbal_tilt_text.setText(String.format("Gimbal Tilt: %.2f", command_gimbal_tilt));
+                yaw_text.setText(String.format("Yaw: %.2f", command_yaw));
+                pitch_text.setText(String.format("Pitch: %.2f", command_pitch));
+                roll_text.setText(String.format("Roll: %.2f", command_roll));
+                throttle_text.setText(String.format("Throttle: %.2f", command_throttle));
+            }catch(Exception e)
+            {
+                showToast(e.toString());
+            }
+
+            if( actuate )
+            {
+                actuate_controls();
+            }
+
+            if( actuate_gimbal )
+            {
+                actuate_gimbal_tilt();
+            }
+        }
+
+        public void actuate_controls()
+        {
+            roll_seekbar.setProgress( (int) constrain(linear_interpolate(command_roll, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            pitch_seekbar.setProgress( (int) constrain(linear_interpolate(command_pitch, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            yaw_seekbar.setProgress( (int) constrain(linear_interpolate(command_yaw, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            throttle_seekbar.setProgress( (int) constrain(linear_interpolate(command_throttle, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+        }
+
+        public void actuate_gimbal_tilt()
+        {
+            gimbal_tilt_seekbar.setProgress( (int) constrain(linear_interpolate(command_gimbal_tilt, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+        }
+
+        public void zero_main_controls()
+        {
+            roll_seekbar.setProgress( (int) constrain(linear_interpolate(0, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            pitch_seekbar.setProgress( (int) constrain(linear_interpolate(0, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            yaw_seekbar.setProgress( (int) constrain(linear_interpolate(0, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+            throttle_seekbar.setProgress( (int) constrain(linear_interpolate(0, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+        }
+
+        public void zero_gimbal_tilt()
+        {
+            gimbal_tilt_seekbar.setProgress( (int) constrain(linear_interpolate(0.0, -1.0, 1.0, 0.0, 1000.0), 0, 1000));
+        }
+    }
+
+    private class CompanionBoardConnector extends TimerTask {
+
         long last_send_time;
+        long last_command_time;
 
         DatagramSocket udp_image_socket = null;
-        Socket image_socket = null;
-        Socket command_socket = null;
-
-        OutputStream image_output_stream = null;
-
-        OutputStream command_output_stream = null;
-        BufferedReader command_input_stream = null;
 
         private boolean is_connected = false;
 
@@ -1262,19 +1079,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         private String input_string = null;
         InetAddress address;
 
-        ConnectCompanionBoardTask()
+        CompanionBoardConnector()
         {
             super();
-
-//            try {
-//                udp_image_socket = new DatagramSocket();
-//                address = InetAddress.getByName("gcs.local");
-//                last_send_time = System.currentTimeMillis();
-//            }
-//            catch(Exception e)
-//            {
-//                showToast(e.toString());
-//            }
         }
 
         @Override
@@ -1297,175 +1104,63 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             // send a request (image) and get a response (commands)
             if( null != image_to_send ) {
                 try {
-//                    byte[] buf = new byte[256];
-//                    String request = "lalala";
-//                    buf = request.getBytes();
-//                    DatagramPacket packet = new DatagramPacket(buf, buf.length, address, 14555);
-//                    udp_image_socket.send(packet);
-
+//                    showToast(String.valueOf(image_to_send.getHeight()) + " " + String.valueOf(image_to_send.getWidth()));
                     // send image here
                     Bitmap image_to_send_copy = image_to_send.copy(image_to_send.getConfig(), false);
+
                     image_to_send = null;
                     Bitmap bitmap_image = toGrayScale(image_to_send_copy);
+//                    showToast(String.valueOf(bitmap_image.getHeight()) + " " + String.valueOf(bitmap_image.getWidth()));
                     ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
 //                        bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
                         bitmap_image.compress(Bitmap.CompressFormat.JPEG, 50, byte_stream);
                     }
                     byte[] image_byte_array = byte_stream.toByteArray();
-//                    int size = byte_array.length;
-//                    byte[] size_bytes = ByteBuffer.allocate(4).putInt(size).array();
                     DatagramPacket packet = new DatagramPacket( image_byte_array, image_byte_array.length, address, 14555);
                     udp_image_socket.send(packet);
-//                    image_to_send = null;
 
                     udp_image_socket.receive(packet);
                     String received = new String(packet.getData(), 0, packet.getLength());
-                    showToast("Received (" + String.valueOf(packet.getLength()) + " ): " + received);
-                } catch (Exception e) {
-                    showToast(e.toString());
-                }
-            }
-//            maintain_connection();
-//            send_image();
-//            read_commands();
-        }
+                    char start = received.charAt(0);
+                    char end   = received.charAt(received.length() - 1);
+                    if( start == '@' && end == '&' )
+                    {
+                        try
+                        {
+                            String[] commands = received.split(",");
 
-        boolean is_connected()
-        {
-            return is_connected;
-        }
+                            command_yaw         = Double.valueOf(commands[3]);
+                            command_gimbal_tilt = Double.valueOf(commands[4]);
+                            command_pitch       = Double.valueOf(commands[5]);
+                            command_roll        = Double.valueOf(commands[6]);
+                            command_throttle    = Double.valueOf(commands[7]);
 
-        private void open_sockets()
-        {
-            try{
-//                udp_image_socket = new DatagramSocket(Integer.valueOf(image_port));
-                udp_image_socket = new DatagramSocket();
-//                InetAddress server_address = InetAddress.getByName("localhost");
-
-                showToast("Opening socket...");
-                SocketAddress socket_address=new InetSocketAddress("192.168.1.100", 14555);
-                udp_image_socket.bind(socket_address);
-                showToast("Socket open!");
-
-                is_connected = true;
-
-                udp_image_socket.setSoTimeout(1500);
-//                showToast("Connecting to CB...");
-            }
-            catch( Exception e )
-            {
-                showToast(e.toString());
-                close_sockets();
-            }
-        }
-
-        private void close_sockets()
-        {
-            try{
-//                image_socket.close();
-                udp_image_socket.close();
-            }
-            catch( Exception e )
-            {
-                e.printStackTrace();
-            }
-
-            try{
-                command_socket.close();
-            }
-            catch( Exception e )
-            {
-                e.printStackTrace();
-            }
-
-            udp_image_socket = null;
-            image_socket = null;
-            command_socket = null;
-
-            image_output_stream = null;
-            command_input_stream = null;
-            command_output_stream = null;
-
-            is_connected = false;
-        }
-
-        private void maintain_connection()
-        {
-            if( ! is_connected ) {
-                // try to connect
-                try {
-                    open_sockets();
-                } catch( Exception e ) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        public void send_bytes(OutputStream output_stream, byte[] byte_array)
-        {
-            if( null != output_stream ) {
-                Thread thread = new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            int size = byte_array.length;
-                            byte[] size_bytes = ByteBuffer.allocate(4).putInt(size).array();
-
-                            output_stream.write(size_bytes);
-                            output_stream.write(byte_array);
-                        } catch (Exception e) {
-                            close_sockets();
-
-                            e.printStackTrace();
+                            last_command_received_time = System.currentTimeMillis();
+                        }
+                        catch( Exception e )
+                        {
+                            command_roll = 0;
+                            command_pitch = 0;
+                            command_yaw = 0;
+                            command_throttle = 0;
+                            command_gimbal_tilt = 0;
+                            showToast("UNRECOGNIZED COMMAND!" + e.toString());
                         }
                     }
-                });
-                thread.start();
-            }
-        }
-
-        public String get_line()
-        {
-            String result = null;
-            if( null != command_input_stream ) {
-                try {
-                    result = command_input_stream.readLine();
-                } catch (Exception e) {
-                    close_sockets();
-
-                    e.printStackTrace();
+                    else if( received.equals("HEARTBEAT") )
+                    {
+                        last_command_received_time = System.currentTimeMillis();
+                    }
+                    else
+                    {
+                        showToast("command not recognized: " + start + ", " + end);
+                    }
                 }
-            }
-            return result;
-        }
-
-        // this method is used to:
-        //  1. initiate a connection if the connection is null
-        //  2. send an image if it has been requested
-        //  3.read data from the connection if it is connected
-
-
-        public void send_image()
-        {
-            showToast("Sending an image " + String.valueOf(System.currentTimeMillis()));
-            if( null != image_to_send ) {
-
-//                Bitmap bitmap_image = toGrayScale(image_to_send);
-                Bitmap bitmap_image = image_to_send;
-
-                ByteArrayOutputStream byte_stream = new ByteArrayOutputStream();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    bitmap_image.compress(Bitmap.CompressFormat.WEBP_LOSSY, 10, byte_stream);
+                catch (Exception e)
+                {
+                    showToast(e.toString());
                 }
-                byte[] image_byte_array = byte_stream.toByteArray();
-
-//                send_bytes(image_output_stream, image_byte_array);
-
-                DatagramPacket packet = new DatagramPacket(image_byte_array, image_byte_array.length);
-
-                image_to_send = null;
-//                showToast("Sent" + String.valueOf(System.currentTimeMillis()));
             }
         }
 
@@ -1489,165 +1184,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         public void set_image_to_send(Bitmap bitmap_image)
         {
-            if( null == image_to_send ) {
+            if( null == image_to_send )
+            {
                 this.image_to_send = bitmap_image;
-            }
-        }
-
-        public void read_commands()
-        {
-            String[] commands = {"landed", "takeoff", "search", "idle_inflight", "approach", "landing", "+"};
-
-            Thread thread = new Thread(new Runnable() {
-                @RequiresApi(api = Build.VERSION_CODES.N)
-                @Override
-                public void run() {
-//                    if( null != command_input_stream ) {
-//                        try {
-//                            input_string = command_input_stream.readLine();
-//
-//                            if(null != input_string)
-//                            {
-//                                char first_character = input_string.charAt(0);
-//                                boolean mode_command = Arrays.stream(commands).anyMatch(input_string::equals);
-//
-////                                showToast(input_string + " " + String.valueOf(mode_command));
-//                                if( '+' == first_character )
-//                                {
-//                                    String message = input_string.substring(1);
-//                                    showToast("CB: " + message);
-//                                }
-//                                else if(! mode_command )
-//                                {
-//                                    try {
-//                                        String[] commands = input_string.split(",");
-//                                        command_roll = Float.valueOf(commands[0]);
-//                                        command_pitch = Float.valueOf(commands[1]);
-//                                        command_yaw = Float.valueOf(commands[2]);
-//                                        command_throttle = Float.valueOf(commands[3]);
-//                                        command_gimbal_tilt = Float.valueOf(commands[4]);
-//
-//                                        data_received = true;
-//
-////                                        Log.d(TAG, String.format("roll: %f ; pitch: %f ; yaw: %f ; throttle: %f ; gimbal_tilt: %f", command_roll, command_pitch, command_yaw, command_throttle, command_gimbal_tilt));
-//                                    }
-//                                    catch( Exception e )
-//                                    {
-//                                        e.printStackTrace();
-//                                    }
-//                                }
-//                                else if( input_string.equals("landed") )
-//                                {
-//                                    notify_landed();
-//                                }
-//                                else if( input_string.equals("takeoff") )
-//                                {
-//                                    notify_takeoff();
-//                                }
-//                                else if( input_string.equals("search") )
-//                                {
-//                                    notify_search();
-//                                }
-//                                else if( input_string.equals("approach") )
-//                                {
-//                                    notify_approach();
-//                                }
-//                                else if( input_string.equals("landing"))
-//                                {
-//                                    command_land = true;
-//                                    notify_landing();
-//                                }
-//                                else
-//                                {
-//                                    showToast("Received invalid command: " + input_string);
-//                                }
-//                            }
-//
-//                        } catch (Exception e) {
-//                            close_sockets();
-//
-//                            e.printStackTrace();
-//                        }
-//                    }
-                }
-            });
-            thread.start();
-        }
-
-        public void notify_landed()
-        {
-            if( null != image_output_stream )
-            {
-                String landed_string = "landed";
-
-                mode = landed_string;
-                send_bytes(image_output_stream, landed_string.getBytes());
-            }
-        }
-
-        public void notify_takeoff()
-        {
-            if( null != image_output_stream )
-            {
-                String takeoff_string = "takeoff";
-                send_bytes(image_output_stream, takeoff_string.getBytes());
-
-                mode = takeoff_string;
-            }
-        }
-
-        public void notify_search()
-        {
-            if( null != image_output_stream )
-            {
-                String search_string = "search";
-
-                mode = search_string;
-                send_bytes(image_output_stream, search_string.getBytes());
-            }
-        }
-
-        public void notify_idle_inflight()
-        {
-            if( null != image_output_stream )
-            {
-                String idle_inflight_string = "idle_inflight";
-
-                mode = idle_inflight_string;
-                send_bytes(image_output_stream, idle_inflight_string.getBytes());
-            }
-        }
-
-        public void notify_precision_hover()
-        {
-            if( null != image_output_stream )
-            {
-                String precision_hover_string = "precision_hover";
-
-                mode = precision_hover_string;
-                send_bytes(image_output_stream, precision_hover_string.getBytes());
-            }
-        }
-
-        public void notify_approach()
-        {
-            if( null != image_output_stream )
-            {
-                String approach_string = "approach";
-
-                mode = approach_string;
-                send_bytes(image_output_stream, approach_string.getBytes());
-            }
-        }
-
-        public void notify_landing()
-        {
-            if( null != image_output_stream )
-            {
-                String landing_string = "landing";
-
-                mode = landing_string;
-                send_bytes(image_output_stream, landing_string.getBytes());
             }
         }
     }

@@ -5,8 +5,7 @@ repositories {
 }
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion '30.0.2'
+    compileSdkVersion 31
     useLibrary 'org.apache.http.legacy'
 
     defaultConfig {
@@ -90,6 +89,7 @@ dependencies {
         exclude module: 'library-anti-distortion'
         //exclude module: 'fly-safe-database'
     })
+    implementation 'com.google.android.material:material:1.5.0'
     compileOnly 'com.dji:dji-sdk-provided:4.15'
 
     implementation 'androidx.appcompat:appcompat:1.2.0'

@@ -32,61 +32,150 @@
         android:visibility="gone"
         android:layout_below="@id/main_title_rl"/>
 
+    <TableLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="left" >
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="40dip" >
+
+            <Space
+                android:layout_width="wrap_content"
+                android:layout_height="100dip" />
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="100dip"
+            android:layout_height="50dip"
+            android:gravity="left">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="left"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="20dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView3"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Actuate Gimbal"
+                    android:textAlignment="textStart" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/actuate_gimbal_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:max="1"
+                    android:progress="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="75dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Actuate Controls"
+                    android:textAlignment="center" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/actuate_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="100dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView5"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Virtual Sticks"
+                    android:textAlignment="gravity" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/virtual_stick_enable_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+    </TableLayout>
+
     <LinearLayout
         android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:layout_below="@id/main_title_rl"
-        android:layout_alignParentLeft="true"
+        android:layout_alignParentStart="true"
         android:orientation="vertical">
-
-        <Button
-            android:id="@+id/virtual_sticks_enable_disable_button"
-            android:layout_width="100dip"
-            android:layout_height="wrap_content"
-            android:text="Virtual Sticks"
-            android:textAlignment="center" />
-
-        <androidx.constraintlayout.widget.Barrier
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:barrierDirection="top" />
-
-        <Button
-            android:id="@+id/takeoff_button"
-            android:layout_width="100dip"
-            android:layout_height="wrap_content"
-            android:text="Takeoff" />
-
-        <androidx.constraintlayout.widget.Barrier
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:barrierDirection="top" />
-
-        <Button
-            android:id="@+id/land_button"
-            android:layout_width="100dip"
-            android:layout_height="wrap_content"
-            android:text="Land" />
-
-        <TextView
-            android:id="@+id/companion_board_status_textview"
-            android:layout_width="200dip"
-            android:layout_height="wrap_content"
-            android:text="uninitialized" />
-
-        <EditText
-            android:id="@+id/cb_address_text"
-            android:layout_width="250dip"
-            android:layout_height="wrap_content"
-            android:ems="10"
-            android:inputType="textPersonName"
-            android:text="192.168.1.100" />
-
-        <TextView
-            android:id="@+id/mode_textview"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="uninitialized" />
 
         <Button
             android:id="@+id/activity_main_screen_texture"
@@ -96,7 +185,8 @@
             android:gravity="center"
             android:onClick="onClick"
             android:text="Demo TextureView"
-            android:visibility="gone" />
+            android:visibility="gone"
+            android:focusable="true" />
 
         <Button
             android:id="@+id/activity_main_screen_surface_with_own_decoder"
@@ -159,8 +249,8 @@
 
         <TextView
             android:id="@+id/yaw_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="100dip"
+            android:layout_height="50dip"
             android:layout_gravity="center_horizontal"
             android:text="Yaw"
             android:translationY="110dip" />
@@ -176,8 +266,8 @@
 
         <TextView
             android:id="@+id/roll_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="100dip"
+            android:layout_height="50dip"
             android:layout_gravity="center_horizontal"
             android:text="Roll"
             android:translationY="620dip" />
@@ -194,8 +284,8 @@
 
         <TextView
             android:id="@+id/throttle_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="100dip"
+            android:layout_height="50dip"
             android:layout_gravity="center_vertical"
             android:rotation="270"
             android:text="Throttle"
@@ -213,8 +303,8 @@
 
         <TextView
             android:id="@+id/pitch_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="100dip"
+            android:layout_height="50dip"
             android:layout_gravity="center_vertical"
             android:rotation="270"
             android:text="Pitch"
@@ -232,20 +322,31 @@
 
         <TextView
             android:id="@+id/gimbal_tilt_textview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="150dip"
+            android:layout_height="50dip"
             android:layout_gravity="center_vertical"
             android:rotation="270"
             android:text="Gimbal Tilt"
             android:translationX="1075dip" />
 
+        <TextView
+            android:id="@+id/gimbal_info_textview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:rotation="0"
+            android:text="Gimbal Info"
+            android:translationX="1075dip"
+            android:translationY="-250dip" />
+
         <TextureView
             android:id="@+id/livestream_preview_ttv"
             android:layout_width="500dip"
-            android:layout_height="375dip"
+            android:layout_height="282dip"
             android:layout_gravity="center"
             android:alpha="50"
             android:visibility="visible" />
+
 
     </FrameLayout>
 
