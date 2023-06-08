@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.provider.Contacts;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.view.DragEvent;
 import android.view.SurfaceHolder;
@@ -454,8 +455,26 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         virtual_stick_enable_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean human_initiated) {
                 enable_virtual_sticks = progress == 1;
+
+                if( human_initiated )
+                {
+                    fcuConnector.setVirtualSticksEnabled( enable_virtual_sticks );
+//                    flight_controller.setVirtualStickModeEnabled(enable_virtual_sticks, new CommonCallbacks.CompletionCallback() {
+//                        @Override
+//                        public void onResult(DJIError djiError) {
+//                            if( null == djiError )
+//                            {
+//                                showToast(String.format("Successfully set virtual sticks: %b", enable_virtual_sticks));
+//                            }
+//                            else
+//                            {
+//                                showToast("Error setting virtual sticks: " + djiError.toString());
+//                            }
+//                        }
+//                    });
+                }
             }
 
             @Override
@@ -468,17 +487,18 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         });
 
-        if (null == companionBoardConnector) {
-            Thread thread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    companionBoardConnector = new CompanionBoardConnector();
-                    companionBoardConnectorTimer = new Timer();
-                    companionBoardConnectorTimer.schedule(companionBoardConnector, 100, 100);
-                }
-            });
-            thread.start();
-        }
+        // TODO uncomment this and reset
+//        if (null == companionBoardConnector) {
+//            Thread thread = new Thread(new Runnable() {
+//                @Override
+//                public void run() {
+//                    companionBoardConnector = new CompanionBoardConnector();
+//                    companionBoardConnectorTimer = new Timer();
+//                    companionBoardConnectorTimer.schedule(companionBoardConnector, 100, 100);
+//                }
+//            });
+//            thread.start();
+//        }
 
         if( null == fcuConnector )
         {
@@ -493,6 +513,15 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             uiActuatorTimer.schedule(uiActuator, 100, 100);
         }
 
+        FlightControllerState.Callback flight_controller_state_callback = new FlightControllerState.Callback() {
+            @Override
+            public void onUpdate(@NonNull FlightControllerState flightControllerState) {
+            }
+        };
+        ((Aircraft) VideoDecodingApplication.getProductInstance()).getFlightController().setStateCallback(flight_controller_state_callback);
+
+
+
         GimbalState.Callback gimbal_state_callback = new GimbalState.Callback() {
             @Override
             public void onUpdate(@NonNull GimbalState gimbalState) {
@@ -503,11 +532,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     double yaw = gimbalState.getYawRelativeToAircraftHeading();
 
                     String info_text_string = String.format("RPY: %.2f, %.2f, %.2f", roll, pitch, yaw);
-                    gimbal_info_text.setText(info_text_string);
+//                    gimbal_info_text.setText(info_text_string);
                 }
                 catch(Exception e)
                 {
-                    showToast(e.toString());
+                    showToast("Gimbal state callback error: " + e.toString());
                 }
             }
         };
@@ -662,7 +691,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             public void onSurfaceTextureUpdated(SurfaceTexture surface) {
                 frame_info_text.setText(String.valueOf(System.currentTimeMillis()));
 
-                companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
+                // TODO uncomment and reset
+//                companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
 //                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
             }
         });
@@ -955,10 +985,52 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                         }
                     });
                 } catch (Exception e) {
-                    showToast(e.toString());
+                    showToast("Gimbal actuation error: " + e.toString());
+                }
+            }
+
+            if( enable_virtual_sticks && (command_roll != 0 || command_pitch != 0 || command_yaw != 0 || command_throttle != 0))
+            {
+                try {
+                    send_virtual_stick_command(command_roll, command_pitch, command_yaw, command_throttle);
+                }
+                catch (Exception e)
+                {
+                    showToast("Errored out while sending virtual stick command: " + e.toString());
                 }
             }
         }
+
+        public void send_virtual_stick_command( double roll, double pitch, double yaw, double throttle )
+        {
+            float command_roll_float     = (float) command_roll;
+            float command_pitch_float    = (float) command_pitch;
+            float command_yaw_float      = (float) command_yaw * 100;
+            float command_throttle_float = (float) command_throttle;
+
+
+            flight_controller.sendVirtualStickFlightControlData(new FlightControlData(command_roll_float, command_pitch_float, command_yaw_float, command_throttle_float), new CommonCallbacks.CompletionCallback() {
+                @Override
+                public void onResult(DJIError djiError) {
+                    if (null != djiError) {
+//                        showToast("Error sending virtual stick command: " + djiError.toString());
+                    }
+                }
+            });
+        }
+
+        public void setVirtualSticksEnabled( boolean enabled )
+        {
+            showToast(String.format("Attempting to set virtual sticks enabled to %b", enabled));
+
+            flight_controller.setVirtualStickModeEnabled(enabled, new CommonCallbacks.CompletionCallback() {
+                @Override
+                public void onResult(DJIError djiError) {
+//                    showToast("Error setting virtual sticks: " + djiError.toString());
+                }
+            });
+        }
+
     }
 
     // task to update the sliders to visualize the desired control outputs
@@ -1025,7 +1097,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 throttle_text.setText(String.format("Throttle: %.2f", command_throttle));
             }catch(Exception e)
             {
-                showToast(e.toString());
+                showToast("UI Actuator error: " + e.toString());
             }
 
             if( actuate )
@@ -1098,7 +1170,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
             catch(Exception e)
             {
-                showToast(e.toString());
+                showToast("Companion board error: " + e.toString());
             }
 
             // send a request (image) and get a response (commands)
@@ -1159,7 +1231,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 }
                 catch (Exception e)
                 {
-                    showToast(e.toString());
+                    showToast("Image send error: " + e.toString());
                 }
             }
         }
