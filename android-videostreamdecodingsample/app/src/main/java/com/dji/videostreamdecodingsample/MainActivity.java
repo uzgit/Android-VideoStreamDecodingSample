@@ -962,9 +962,12 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private class FCUConnector extends TimerTask {
 
+        long last_virtual_stick_send_time_millis;
+
         public FCUConnector()
         {
             super();
+            last_virtual_stick_send_time_millis = System.currentTimeMillis();
         }
 
         @Override
@@ -989,8 +992,10 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 }
             }
 
-            if( enable_virtual_sticks && (command_roll != 0 || command_pitch != 0 || command_yaw != 0 || command_throttle != 0))
+            if( enable_virtual_sticks && (System.currentTimeMillis() - last_virtual_stick_send_time_millis < 250 || command_roll != 0 || command_pitch != 0 || command_yaw != 0 || command_throttle != 0))
             {
+                last_virtual_stick_send_time_millis = System.currentTimeMillis();
+
                 try {
                     send_virtual_stick_command(command_roll, command_pitch, command_yaw, command_throttle);
                 }
