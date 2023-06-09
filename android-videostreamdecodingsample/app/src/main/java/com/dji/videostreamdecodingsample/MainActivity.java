@@ -513,28 +513,21 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         });
 
-        Handler takeoff_seekbar_handler = new Handler();
         takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
 
-            private Runnable delayedResetAction;
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 if( progress == 1 )
                 {
                     fcuConnector.takeoff();
 
-                    if( null != delayedResetAction )
-                    {
-                        takeoff_seekbar_handler.removeCallbacks(delayedResetAction);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        seekBar.setProgress(0, true);
                     }
-
-                    delayedResetAction = new Runnable() {
-                        @Override
-                        public void run() {
-                            seekBar.setProgress(0);
-                        }
-                    };
-                    takeoff_seekbar_handler.postDelayed(delayedResetAction, 500);
+                    else
+                    {
+                        seekBar.setProgress(0);
+                    }
                 }
             }
 
@@ -550,7 +543,6 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
         });
 
-        Handler precision_takeoff_seekbar_handler = new Handler();
         precision_takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             Timer timer;
             TimerTask timerTask;
@@ -561,18 +553,13 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 {
                     fcuConnector.precision_takeoff();
 
-                    if( null != delayedResetAction )
-                    {
-                        precision_takeoff_seekbar_handler.removeCallbacks(delayedResetAction);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        seekBar.setProgress(0, true);
                     }
-
-                    delayedResetAction = new Runnable() {
-                        @Override
-                        public void run() {
-                            seekBar.setProgress(0);
-                        }
-                    };
-                    precision_takeoff_seekbar_handler.postDelayed(delayedResetAction, 500);
+                    else
+                    {
+                        seekBar.setProgress(0);
+                    }
                 }
             }
 
@@ -600,18 +587,13 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 {
                     fcuConnector.land();
 
-                    if( null != delayedResetAction )
-                    {
-                        land_seekbar_handler.removeCallbacks(delayedResetAction);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        seekBar.setProgress(0, true);
                     }
-
-                    delayedResetAction = new Runnable() {
-                        @Override
-                        public void run() {
-                            seekBar.setProgress(0);
-                        }
-                    };
-                    land_seekbar_handler.postDelayed(delayedResetAction, 500);
+                    else
+                    {
+                        seekBar.setProgress(0);
+                    }
                 }
             }
 
@@ -660,8 +642,6 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
         };
         ((Aircraft) VideoDecodingApplication.getProductInstance()).getFlightController().setStateCallback(flight_controller_state_callback);
-
-
 
         GimbalState.Callback gimbal_state_callback = new GimbalState.Callback() {
             @Override
