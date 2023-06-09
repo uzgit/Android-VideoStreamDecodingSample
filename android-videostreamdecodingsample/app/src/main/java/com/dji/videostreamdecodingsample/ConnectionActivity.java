@@ -243,7 +243,7 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
         mBtnOpen = (Button) findViewById(R.id.btn_open);
         mBtnOpen.setOnClickListener(this);
         mBtnOpen.setEnabled(false);
-        ((TextView)findViewById(R.id.textView2)).setText(getResources().getString(R.string.sdk_version, DJISDKManager.getInstance().getSDKVersion()));
+//        ((TextView)findViewById(R.id.textView2)).setText(getResources().getString(R.string.sdk_version, DJISDKManager.getInstance().getSDKVersion()));
 
         showToast("Initializing UI..." );
     }
@@ -291,9 +291,9 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
                 @Override
                 public void run() {
                     if (TextUtils.isEmpty(version)) {
-                        mTextModelAvailable.setText("N/A"); //Firmware version:
+//                        mTextModelAvailable.setText("N/A"); //Firmware version:
                     } else {
-                        mTextModelAvailable.setText(version); //"Firmware version: " +
+//                        mTextModelAvailable.setText(version); //"Firmware version: " +
                     }
                 }
             });
@@ -323,12 +323,12 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
             mBtnOpen.setEnabled(true);
 
             String str = mProduct instanceof Aircraft ? "DJIAircraft" : "DJIHandHeld";
-            mTextConnectionStatus.setText("Status: " + str + " connected");
+//            mTextConnectionStatus.setText("Status: " + str + " connected");
 
             if (null != mProduct.getModel()) {
-                mTextProduct.setText("" + mProduct.getModel().getDisplayName());
+//                mTextProduct.setText("" + mProduct.getModel().getDisplayName());
             } else {
-                mTextProduct.setText(R.string.product_information);
+//                mTextProduct.setText(R.string.product_information);
             }
             if (KeyManager.getInstance() != null) {
                 KeyManager.getInstance().addListener(firmkey, firmVersionListener);
@@ -345,8 +345,8 @@ public class ConnectionActivity extends Activity implements View.OnClickListener
             Log.v(TAG, "refreshSDK: False");
             mBtnOpen.setEnabled(false);
 
-            mTextProduct.setText(R.string.product_information);
-            mTextConnectionStatus.setText(R.string.connection_loose);
+//            mTextProduct.setText(R.string.product_information);
+//            mTextConnectionStatus.setText(R.string.connection_loose);
         }
     }
     @Override

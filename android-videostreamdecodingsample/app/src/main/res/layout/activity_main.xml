@@ -164,6 +164,93 @@
                     android:layout_height="wrap_content"
                     android:max="1" />
 
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="100dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView6"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Takeoff"
+                    android:textAlignment="gravity" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/takeoff_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="100dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView7"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Land"
+                    android:textAlignment="gravity" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/land_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
             </LinearLayout>
 
         </TableRow>
@@ -232,7 +319,8 @@
         android:padding="5dp"
         android:scrollbars="vertical"
         android:textColor="@color/colorWhite"
-        android:visibility="invisible" />
+        android:visibility="invisible"
+        tools:ignore="NotSibling" />
 
     <FrameLayout
         android:layout_width="match_parent"

@@ -165,6 +165,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     SeekBar actuate_gimbal_seekbar;
     SeekBar actuate_seekbar;
     SeekBar virtual_stick_enable_seekbar;
+    SeekBar takeoff_seekbar;
+    SeekBar land_seekbar;
 
     TextView roll_text;
     TextView pitch_text;
@@ -294,6 +296,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         actuate_gimbal_seekbar = (SeekBar) findViewById(R.id.actuate_gimbal_seekbar);
         actuate_seekbar = (SeekBar) findViewById(R.id.actuate_seekbar);
         virtual_stick_enable_seekbar = (SeekBar) findViewById(R.id.virtual_stick_enable_seekbar);
+        takeoff_seekbar = (SeekBar) findViewById(R.id.takeoff_seekbar);
+        land_seekbar = (SeekBar) findViewById(R.id.land_seekbar);
 
         roll_text = (TextView) findViewById(R.id.roll_textview);
         pitch_text = (TextView) findViewById(R.id.pitch_textview);
@@ -461,19 +465,6 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 if( human_initiated )
                 {
                     fcuConnector.setVirtualSticksEnabled( enable_virtual_sticks );
-//                    flight_controller.setVirtualStickModeEnabled(enable_virtual_sticks, new CommonCallbacks.CompletionCallback() {
-//                        @Override
-//                        public void onResult(DJIError djiError) {
-//                            if( null == djiError )
-//                            {
-//                                showToast(String.format("Successfully set virtual sticks: %b", enable_virtual_sticks));
-//                            }
-//                            else
-//                            {
-//                                showToast("Error setting virtual sticks: " + djiError.toString());
-//                            }
-//                        }
-//                    });
                 }
             }
 
@@ -485,6 +476,64 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
 
+        });
+
+        takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                if( progress == 1 )
+                {
+                    Timer timer = new Timer();
+                    TimerTask timerTask = new TimerTask() {
+                        @Override
+                        public void run() {
+                            seekBar.setProgress(0);
+                        }
+                    };
+                    timer.schedule(timerTask, 500);
+
+                    fcuConnector.takeoff();
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        land_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                if( progress == 1 )
+                {
+                    Timer timer = new Timer();
+                    TimerTask timerTask = new TimerTask() {
+                        @Override
+                        public void run() {
+                            seekBar.setProgress(0);
+                        }
+                    };
+                    timer.schedule(timerTask, 500);
+
+                    fcuConnector.land();
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
         });
 
         // TODO uncomment this and reset
@@ -1020,6 +1069,27 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     if (null != djiError) {
 //                        showToast("Error sending virtual stick command: " + djiError.toString());
                     }
+                }
+            });
+        }
+
+        public void takeoff()
+        {
+            showToast("Starting takeoff!");
+            flight_controller.startTakeoff(new CommonCallbacks.CompletionCallback() {
+                @Override
+                public void onResult(DJIError djiError) {
+
+                }
+            });
+        }
+
+        public void land()
+        {
+            flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
+                @Override
+                public void onResult(DJIError djiError) {
+
                 }
             });
         }
