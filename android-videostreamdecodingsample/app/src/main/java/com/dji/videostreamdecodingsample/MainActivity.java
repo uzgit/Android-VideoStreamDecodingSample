@@ -53,6 +53,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -149,6 +150,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     boolean command_land = false;
     boolean data_received = false;
 
+    double gimbal_pitch = 0;
+    double gimbal_roll = 0;
+    double gimbal_yaw = 0;
+    double gimbal_max_pitch = 85;
+
     boolean actuate_gimbal = true;
     boolean actuate = false;
     boolean enable_virtual_sticks = false;
@@ -162,6 +168,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     SeekBar yaw_seekbar;
     SeekBar throttle_seekbar;
     SeekBar gimbal_tilt_seekbar;
+    SeekBar gimbal_absolute_tilt_seekbar;
     SeekBar actuate_gimbal_seekbar;
     SeekBar actuate_seekbar;
     SeekBar virtual_stick_enable_seekbar;
@@ -175,6 +182,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     TextView yaw_text;
     TextView throttle_text;
     TextView gimbal_tilt_text;
+    TextView gimbal_absolute_tilt_text;
 
     private Aircraft aircraft;
     private FlightController flight_controller;
@@ -295,6 +303,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         yaw_seekbar = (SeekBar) findViewById(R.id.yaw_seekbar);
         throttle_seekbar = (SeekBar) findViewById(R.id.throttle_seekbar);
         gimbal_tilt_seekbar = (SeekBar) findViewById(R.id.gimbal_tilt_seekbar);
+        gimbal_absolute_tilt_seekbar = (SeekBar) findViewById(R.id.gimbal_absolute_tilt_seekbar);
         actuate_gimbal_seekbar = (SeekBar) findViewById(R.id.actuate_gimbal_seekbar);
         actuate_seekbar = (SeekBar) findViewById(R.id.actuate_seekbar);
         virtual_stick_enable_seekbar = (SeekBar) findViewById(R.id.virtual_stick_enable_seekbar);
@@ -308,6 +317,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         yaw_text = (TextView) findViewById(R.id.yaw_textview);
         throttle_text = (TextView) findViewById(R.id.throttle_textview);
         gimbal_tilt_text = (TextView) findViewById(R.id.gimbal_tilt_textview);
+        gimbal_absolute_tilt_text = (TextView) findViewById(R.id.gimbal_absolute_tilt_textview);
 
         roll_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
@@ -503,21 +513,28 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         });
 
+        Handler takeoff_seekbar_handler = new Handler();
         takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+            private Runnable delayedResetAction;
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 if( progress == 1 )
                 {
-                    Timer timer = new Timer();
-                    TimerTask timerTask = new TimerTask() {
-                        @Override
-                        public void run() {
-                            seekBar.setProgress(0);
-                        }
-                    };
-                    timer.schedule(timerTask, 500);
-
                     fcuConnector.takeoff();
+
+                    if( null != delayedResetAction )
+                    {
+                        takeoff_seekbar_handler.removeCallbacks(delayedResetAction);
+                    }
+
+                    delayedResetAction = new Runnable() {
+                        @Override
+                        public void run() {
+                            seekBar.setProgress(0);
+                        }
+                    };
+                    takeoff_seekbar_handler.postDelayed(delayedResetAction, 500);
                 }
             }
 
@@ -527,26 +544,35 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
 
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
+            public void onStopTrackingTouch(SeekBar seekBar)
+            {
 
             }
         });
 
+        Handler precision_takeoff_seekbar_handler = new Handler();
         precision_takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            Timer timer;
+            TimerTask timerTask;
+            private Runnable delayedResetAction;
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
                 if( progress == 1 )
                 {
-                    Timer timer = new Timer();
-                    TimerTask timerTask = new TimerTask() {
+                    fcuConnector.precision_takeoff();
+
+                    if( null != delayedResetAction )
+                    {
+                        precision_takeoff_seekbar_handler.removeCallbacks(delayedResetAction);
+                    }
+
+                    delayedResetAction = new Runnable() {
                         @Override
                         public void run() {
                             seekBar.setProgress(0);
                         }
                     };
-                    timer.schedule(timerTask, 500);
-
-                    fcuConnector.precision_takeoff();
+                    precision_takeoff_seekbar_handler.postDelayed(delayedResetAction, 500);
                 }
             }
 
@@ -556,26 +582,36 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
 
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
+            public void onStopTrackingTouch(SeekBar seekBar)
+            {
 
             }
         });
 
+        Handler land_seekbar_handler = new Handler();
         land_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+            private Runnable delayedResetAction;
+
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b)
+            {
                 if( progress == 1 )
                 {
-                    Timer timer = new Timer();
-                    TimerTask timerTask = new TimerTask() {
+                    fcuConnector.land();
+
+                    if( null != delayedResetAction )
+                    {
+                        land_seekbar_handler.removeCallbacks(delayedResetAction);
+                    }
+
+                    delayedResetAction = new Runnable() {
                         @Override
                         public void run() {
                             seekBar.setProgress(0);
                         }
                     };
-                    timer.schedule(timerTask, 500);
-
-                    fcuConnector.land();
+                    land_seekbar_handler.postDelayed(delayedResetAction, 500);
                 }
             }
 
@@ -585,7 +621,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
 
             @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {
+            public void onStopTrackingTouch(SeekBar seekBar)
+            {
 
             }
         });
@@ -619,6 +656,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         FlightControllerState.Callback flight_controller_state_callback = new FlightControllerState.Callback() {
             @Override
             public void onUpdate(@NonNull FlightControllerState flightControllerState) {
+//                flightControllerState.geta
             }
         };
         ((Aircraft) VideoDecodingApplication.getProductInstance()).getFlightController().setStateCallback(flight_controller_state_callback);
@@ -634,8 +672,16 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     double pitch = gimbalState.getAttitudeInDegrees().getPitch();
                     double yaw = gimbalState.getYawRelativeToAircraftHeading();
 
-                    String info_text_string = String.format("RPY: %.2f, %.2f, %.2f", roll, pitch, yaw);
+                    gimbal_pitch = pitch;
+                    gimbal_roll = roll;
+                    gimbal_yaw = yaw;
+                    gimbal_max_pitch = -gimbal_pitch > gimbal_max_pitch ? -gimbal_pitch : gimbal_max_pitch;
+
+//                    String info_text_string = String.format("RPY: %.2f, %.2f, %.2f", roll, pitch, yaw);
 //                    gimbal_info_text.setText(info_text_string);
+//
+//                    gimbal_absolute_tilt_text.setText( String.format("Gimbal Absolute Tilt: %.2f", pitch ) );
+//                    gimbal_absolute_tilt_seekbar.setProgress(1000 + (int)(pitch / 85.0 * 1000.0));
                 }
                 catch(Exception e)
                 {
@@ -643,6 +689,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 }
             }
         };
+
         VideoDecodingApplication.getProductInstance().getGimbal().setStateCallback(gimbal_state_callback);
 
         set_default_modes();
@@ -795,7 +842,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 frame_info_text.setText(String.valueOf(System.currentTimeMillis()));
 
                 // TODO uncomment and reset
-//                companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
+                if( null != companionBoardConnector ) {
+                    companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
+                }
 //                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
             }
         });
@@ -1129,6 +1178,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         public void takeoff()
         {
+            takeoff = true;
+
             showToast("Starting takeoff!");
             flight_controller.startTakeoff(new CommonCallbacks.CompletionCallback() {
                 @Override
@@ -1140,6 +1191,8 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         public void precision_takeoff()
         {
+            takeoff = true;
+
             showToast("Starting precision takeoff!");
             flight_controller.startPrecisionTakeoff(new CommonCallbacks.CompletionCallback() {
                 @Override
@@ -1256,6 +1309,22 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             {
                 actuate_gimbal_tilt();
             }
+
+//            String info_text_string = String.format("RPY: %.2f, %.2f, %.2f", gimbal_roll, gimbal_pitch, gimbal_yaw);
+//            gimbal_info_text.setText(info_text_string);
+
+//            try {
+//                gimbal_absolute_tilt_text.setText(String.format("Gimbal Absolute Tilt: %.2f", gimbal_pitch));
+//
+//                int absolute_tilt_control = 1000 + (int) (gimbal_pitch / 85.0 * 1000.0);
+//                absolute_tilt_control = absolute_tilt_control < 1000 ? absolute_tilt_control : 1000;
+//                absolute_tilt_control = absolute_tilt_control > 0 ? absolute_tilt_control : 0;
+//                gimbal_absolute_tilt_seekbar.setProgress(1000 + (int) (gimbal_pitch / gimbal_max_pitch * 1000.0));
+//            }
+//            catch (Exception e)
+//            {
+//                showToast("Gimbal absolute tilt error: " + e.toString());
+//            }
         }
 
         public void actuate_controls()
@@ -1320,7 +1389,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 showToast("Companion board error: " + e.toString());
             }
 
-            // send a request (image) and get a response (commands)
+            // send an image if one is available
             if( null != image_to_send ) {
                 try {
 //                    showToast(String.valueOf(image_to_send.getHeight()) + " " + String.valueOf(image_to_send.getWidth()));
@@ -1339,46 +1408,34 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     DatagramPacket packet = new DatagramPacket( image_byte_array, image_byte_array.length, address, 14555);
                     udp_image_socket.send(packet);
 
-                    udp_image_socket.receive(packet);
-                    String received = new String(packet.getData(), 0, packet.getLength());
-                    char start = received.charAt(0);
-                    char end   = received.charAt(received.length() - 1);
-                    if( start == '@' && end == '&' )
-                    {
-                        try
-                        {
-                            String[] commands = received.split(",");
-
-                            command_yaw         = Double.valueOf(commands[3]);
-                            command_gimbal_tilt = Double.valueOf(commands[4]);
-                            command_pitch       = Double.valueOf(commands[5]);
-                            command_roll        = Double.valueOf(commands[6]);
-                            command_throttle    = Double.valueOf(commands[7]);
-
-                            last_command_received_time = System.currentTimeMillis();
-                        }
-                        catch( Exception e )
-                        {
-                            command_roll = 0;
-                            command_pitch = 0;
-                            command_yaw = 0;
-                            command_throttle = 0;
-                            command_gimbal_tilt = 0;
-                            showToast("UNRECOGNIZED COMMAND!" + e.toString());
-                        }
-                    }
-                    else if( received.equals("HEARTBEAT") )
-                    {
-                        last_command_received_time = System.currentTimeMillis();
-                    }
-                    else
-                    {
-                        showToast("command not recognized: " + start + ", " + end);
-                    }
+                    read_command();
                 }
                 catch (Exception e)
                 {
                     showToast("Image send error: " + e.toString());
+                }
+            }
+            else // otherwise, send gimbal orientation information
+            {
+                String gimbal_orientation_string = "{";
+                gimbal_orientation_string += String.format("gimbal_imu_pitch:%.5f", gimbal_pitch);
+                gimbal_orientation_string += ",";
+                gimbal_orientation_string += String.format("gimbal_imu_roll:%.4f", gimbal_roll);
+                gimbal_orientation_string += ",";
+                gimbal_orientation_string += String.format("altitude:4");
+                gimbal_orientation_string += ",";
+                gimbal_orientation_string += String.format("takeoff:%s", takeoff ? "True" : "False");
+                gimbal_orientation_string += "}";
+
+                DatagramPacket packet = new DatagramPacket( gimbal_orientation_string.getBytes(), gimbal_orientation_string.getBytes().length, 14555 );
+
+                try {
+                    udp_image_socket.send(packet);
+                    read_command();
+                }
+                catch ( Exception e )
+                {
+                    showToast("Gimbal orientation info send error: " + e.toString());
                 }
             }
         }
@@ -1406,6 +1463,49 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             if( null == image_to_send )
             {
                 this.image_to_send = bitmap_image;
+            }
+        }
+
+        public void read_command() throws IOException {
+
+            byte[] buffer = new byte[1024];
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+
+            udp_image_socket.receive(packet);
+            String received = new String(packet.getData(), 0, packet.getLength());
+            char start = received.charAt(0);
+            char end   = received.charAt(received.length() - 1);
+            if( start == '@' && end == '&' )
+            {
+                try
+                {
+                    String[] commands = received.split(",");
+
+                    command_yaw         = Double.valueOf(commands[3]);
+                    command_gimbal_tilt = Double.valueOf(commands[4]);
+                    command_pitch       = Double.valueOf(commands[5]);
+                    command_roll        = Double.valueOf(commands[6]);
+                    command_throttle    = Double.valueOf(commands[7]);
+
+                    last_command_received_time = System.currentTimeMillis();
+                }
+                catch( Exception e )
+                {
+                    command_roll = 0;
+                    command_pitch = 0;
+                    command_yaw = 0;
+                    command_throttle = 0;
+                    command_gimbal_tilt = 0;
+                    showToast("UNRECOGNIZED COMMAND!" + e.toString());
+                }
+            }
+            else if( received.equals("HEARTBEAT") )
+            {
+                last_command_received_time = System.currentTimeMillis();
+            }
+            else
+            {
+                showToast("command not recognized: " + start + ", " + end);
             }
         }
     }
