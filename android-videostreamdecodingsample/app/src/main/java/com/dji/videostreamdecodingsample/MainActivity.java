@@ -165,7 +165,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     SeekBar actuate_gimbal_seekbar;
     SeekBar actuate_seekbar;
     SeekBar virtual_stick_enable_seekbar;
+    SeekBar advanced_virtual_stick_enable_seekbar;
     SeekBar takeoff_seekbar;
+    SeekBar precision_takeoff_seekbar;
     SeekBar land_seekbar;
 
     TextView roll_text;
@@ -296,7 +298,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         actuate_gimbal_seekbar = (SeekBar) findViewById(R.id.actuate_gimbal_seekbar);
         actuate_seekbar = (SeekBar) findViewById(R.id.actuate_seekbar);
         virtual_stick_enable_seekbar = (SeekBar) findViewById(R.id.virtual_stick_enable_seekbar);
+        advanced_virtual_stick_enable_seekbar = (SeekBar) findViewById(R.id.advanced_virtual_stick_enable_seekbar);
         takeoff_seekbar = (SeekBar) findViewById(R.id.takeoff_seekbar);
+        precision_takeoff_seekbar = (SeekBar) findViewById(R.id.precision_takeoff_seekbar);
         land_seekbar = (SeekBar) findViewById(R.id.land_seekbar);
 
         roll_text = (TextView) findViewById(R.id.roll_textview);
@@ -478,6 +482,27 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
         });
 
+        advanced_virtual_stick_enable_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean human_initiated) {
+                enable_virtual_sticks = progress == 1;
+
+                if( human_initiated )
+                {
+                    fcuConnector.setAdvancedVirtualStickMode( enable_virtual_sticks );
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+            }
+
+        });
+
         takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
@@ -493,6 +518,35 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                     timer.schedule(timerTask, 500);
 
                     fcuConnector.takeoff();
+                }
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+
+            }
+        });
+
+        precision_takeoff_seekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean b) {
+                if( progress == 1 )
+                {
+                    Timer timer = new Timer();
+                    TimerTask timerTask = new TimerTask() {
+                        @Override
+                        public void run() {
+                            seekBar.setProgress(0);
+                        }
+                    };
+                    timer.schedule(timerTask, 500);
+
+                    fcuConnector.precision_takeoff();
                 }
             }
 
@@ -1084,8 +1138,20 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             });
         }
 
+        public void precision_takeoff()
+        {
+            showToast("Starting precision takeoff!");
+            flight_controller.startPrecisionTakeoff(new CommonCallbacks.CompletionCallback() {
+                @Override
+                public void onResult(DJIError djiError) {
+
+                }
+            });
+        }
+
         public void land()
         {
+            showToast("Starting land!");
             flight_controller.startLanding(new CommonCallbacks.CompletionCallback() {
                 @Override
                 public void onResult(DJIError djiError) {
@@ -1104,6 +1170,12 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 //                    showToast("Error setting virtual sticks: " + djiError.toString());
                 }
             });
+        }
+
+        public void setAdvancedVirtualStickMode( boolean enabled )
+        {
+            showToast(String.format("Setting advanced virtual stick mode to: %b", enabled));
+            flight_controller.setVirtualStickAdvancedModeEnabled(enabled);
         }
 
     }

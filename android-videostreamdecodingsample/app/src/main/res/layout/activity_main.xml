@@ -188,6 +188,47 @@
                     android:layout_weight="1" />
 
                 <TextView
+                    android:id="@+id/textView9"
+                    android:layout_width="120dip"
+                    android:layout_height="wrap_content"
+                    android:text="Adv. Virtual Sticks"
+                    android:textAlignment="gravity" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/advanced_virtual_stick_enable_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="100dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
                     android:id="@+id/textView6"
                     android:layout_width="120dip"
                     android:layout_height="wrap_content"
@@ -201,6 +242,47 @@
 
                 <SeekBar
                     android:id="@+id/takeoff_seekbar"
+                    android:layout_width="100dip"
+                    android:layout_height="wrap_content"
+                    android:max="1" />
+
+                <Space
+                    android:layout_width="wrap_content"
+                    android:layout_height="50dip"
+                    android:layout_weight="1" />
+
+            </LinearLayout>
+
+        </TableRow>
+
+        <TableRow
+            android:layout_width="match_parent"
+            android:layout_height="100dip">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal">
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/textView8"
+                    android:layout_width="120dip"
+                    android:layout_height="wrap_content"
+                    android:text="Prec. Takeoff"
+                    android:textAlignment="gravity" />
+
+                <Space
+                    android:layout_width="10dip"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <SeekBar
+                    android:id="@+id/precision_takeoff_seekbar"
                     android:layout_width="100dip"
                     android:layout_height="wrap_content"
                     android:max="1" />
@@ -406,7 +488,7 @@
             android:max="1000"
             android:progress="500"
             android:rotation="270"
-            android:translationX="1000dip" />
+            android:translationX="940dip" />
 
         <TextView
             android:id="@+id/gimbal_tilt_textview"
@@ -415,7 +497,26 @@
             android:layout_gravity="center_vertical"
             android:rotation="270"
             android:text="Gimbal Tilt"
-            android:translationX="1075dip" />
+            android:translationX="1045dip" />
+
+        <SeekBar
+            android:id="@+id/gimbal_absolute_tilt_seekbar"
+            android:layout_width="400dip"
+            android:layout_height="40dip"
+            android:layout_gravity="center_vertical"
+            android:max="1000"
+            android:progress="500"
+            android:rotation="270"
+            android:translationX="1050dip" />
+
+        <TextView
+            android:id="@+id/gimbal_absolute_tilt_textview"
+            android:layout_width="150dip"
+            android:layout_height="50dip"
+            android:layout_gravity="center_vertical"
+            android:rotation="270"
+            android:text="Gimbal Absolute Tilt"
+            android:translationX="1155dip" />
 
         <TextView
             android:id="@+id/gimbal_info_textview"
