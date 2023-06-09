@@ -134,6 +134,9 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
 
     private CompanionBoardConnector companionBoardConnector;
     private Timer companionBoardConnectorTimer;
+    private Bitmap bitmap_buffer;
+    private ImageUpdater imageUpdater;
+    private Timer imageUpdaterTimer;
 
     private FCUConnector fcuConnector;
     private Timer fcuConnectorTimer;
@@ -149,6 +152,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
     double command_gimbal_tilt;
     boolean command_land = false;
     boolean data_received = false;
+    double altitude = 0;
 
     double gimbal_pitch = 0;
     double gimbal_roll = 0;
@@ -610,17 +614,24 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         });
 
         // TODO uncomment this and reset
-//        if (null == companionBoardConnector) {
-//            Thread thread = new Thread(new Runnable() {
-//                @Override
-//                public void run() {
-//                    companionBoardConnector = new CompanionBoardConnector();
-//                    companionBoardConnectorTimer = new Timer();
-//                    companionBoardConnectorTimer.schedule(companionBoardConnector, 100, 100);
-//                }
-//            });
-//            thread.start();
-//        }
+        if (null == companionBoardConnector) {
+            Thread thread = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    companionBoardConnector = new CompanionBoardConnector();
+                    companionBoardConnectorTimer = new Timer();
+                    companionBoardConnectorTimer.schedule(companionBoardConnector, 100, 100);
+                }
+            });
+            thread.start();
+        }
+
+        if( null == imageUpdater )
+        {
+            imageUpdater = new ImageUpdater();
+            imageUpdaterTimer = new Timer();
+            imageUpdaterTimer.schedule(imageUpdater, 100, 167);
+        }
 
         if( null == fcuConnector )
         {
@@ -638,7 +649,7 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         FlightControllerState.Callback flight_controller_state_callback = new FlightControllerState.Callback() {
             @Override
             public void onUpdate(@NonNull FlightControllerState flightControllerState) {
-//                flightControllerState.geta
+                altitude = flightControllerState.getAircraftLocation().getAltitude();
             }
         };
         ((Aircraft) VideoDecodingApplication.getProductInstance()).getFlightController().setStateCallback(flight_controller_state_callback);
@@ -822,9 +833,11 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
                 frame_info_text.setText(String.valueOf(System.currentTimeMillis()));
 
                 // TODO uncomment and reset
-                if( null != companionBoardConnector ) {
-                    companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
-                }
+
+                bitmap_buffer = videostreamPreviewTtView.getBitmap(854, 480);
+//                if( null != companionBoardConnector ) {
+//                    companionBoardConnector.set_image_to_send(videostreamPreviewTtView.getBitmap(854, 480));
+//                }
 //                connectCompanionBoardTask.set_image_to_send(videostreamPreviewTtView.getBitmap());
             }
         });
@@ -1334,6 +1347,14 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
         }
     }
 
+    private class ImageUpdater extends TimerTask {
+
+        @Override
+        public void run() {
+            companionBoardConnector.set_image_to_send(bitmap_buffer);
+        }
+    }
+
     private class CompanionBoardConnector extends TimerTask {
 
         long last_send_time;
@@ -1370,8 +1391,12 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
 
             // send an image if one is available
-            if( null != image_to_send ) {
+            if( null != image_to_send )
+//            if( false )
+            {
                 try {
+                    Log.d("status","sending image");
+
 //                    showToast(String.valueOf(image_to_send.getHeight()) + " " + String.valueOf(image_to_send.getWidth()));
                     // send image here
                     Bitmap image_to_send_copy = image_to_send.copy(image_to_send.getConfig(), false);
@@ -1397,17 +1422,21 @@ public class MainActivity extends Activity implements DJICodecManager.YuvDataCal
             }
             else // otherwise, send gimbal orientation information
             {
+                Log.d("status","sending gimbal info");
+
                 String gimbal_orientation_string = "{";
-                gimbal_orientation_string += String.format("gimbal_imu_pitch:%.5f", gimbal_pitch);
+                gimbal_orientation_string += String.format("'gimbal_imu_pitch':%.4f", gimbal_pitch);
                 gimbal_orientation_string += ",";
-                gimbal_orientation_string += String.format("gimbal_imu_roll:%.4f", gimbal_roll);
+                gimbal_orientation_string += String.format("'gimbal_imu_roll':%.4f", gimbal_roll);
                 gimbal_orientation_string += ",";
-                gimbal_orientation_string += String.format("altitude:4");
+                gimbal_orientation_string += String.format("'altitude':%.4f", altitude);
                 gimbal_orientation_string += ",";
-                gimbal_orientation_string += String.format("takeoff:%s", takeoff ? "True" : "False");
+                gimbal_orientation_string += String.format("'takeoff':%s", takeoff ? "True" : "False");
                 gimbal_orientation_string += "}";
 
-                DatagramPacket packet = new DatagramPacket( gimbal_orientation_string.getBytes(), gimbal_orientation_string.getBytes().length, 14555 );
+                takeoff = false;
+
+                DatagramPacket packet = new DatagramPacket( gimbal_orientation_string.getBytes(), gimbal_orientation_string.getBytes().length, address,14555 );
 
                 try {
                     udp_image_socket.send(packet);
